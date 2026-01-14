@@ -1,0 +1,29 @@
+name = "spitalfields-reviews"
+main = "src/server/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+[site]
+bucket = "./dist/client"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "reviews-db"
+database_id = "a4f55825-e691-4c65-9cd5-19326b62a482"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "79b3c677c59e483eac1db22f3edba7bf"
+
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "reviews-photos"
+
+[vars]
+WORKOS_REDIRECT_URI = "https://spitalfields-reviews.janekm.workers.dev/api/auth/callback"
+CLIENT_URL = "https://spitalfields-reviews.janekm.workers.dev"
+
+# Secrets (set via wrangler secret put):
+# - WORKOS_API_KEY
+# - WORKOS_CLIENT_ID
+# - COOKIE_SECRET (generate with: openssl rand -base64 32)

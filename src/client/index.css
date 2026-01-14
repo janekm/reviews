@@ -1,0 +1,349 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Warm & Inviting - High Contrast */
+    --background: 35 30% 96%;
+    --foreground: 20 30% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 20 30% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 30% 10%;
+
+    /* Rich Terracotta Primary */
+    --primary: 14 75% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Warm Cream Secondary */
+    --secondary: 35 35% 90%;
+    --secondary-foreground: 20 25% 20%;
+
+    /* Higher contrast muted */
+    --muted: 35 20% 92%;
+    --muted-foreground: 20 15% 38%;
+
+    /* Deep Teal Accent */
+    --accent: 168 55% 32%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 75% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 30 18% 82%;
+    --input: 30 18% 82%;
+    --ring: 14 75% 45%;
+
+    --radius: 0.5rem;
+
+    /* Venue type colors - vibrant */
+    --venue-restaurant: 14 75% 45%;
+    --venue-cafe: 32 75% 42%;
+    --venue-shop: 275 50% 52%;
+    --venue-bar: 200 65% 42%;
+
+    /* Star rating */
+    --star: 42 100% 50%;
+    --star-empty: 30 12% 78%;
+  }
+
+  .dark {
+    --background: 20 20% 7%;
+    --foreground: 35 25% 95%;
+
+    --card: 20 15% 10%;
+    --card-foreground: 35 25% 95%;
+
+    --popover: 20 15% 10%;
+    --popover-foreground: 35 25% 95%;
+
+    --primary: 14 70% 55%;
+    --primary-foreground: 20 20% 7%;
+
+    --secondary: 20 12% 15%;
+    --secondary-foreground: 35 20% 85%;
+
+    --muted: 20 12% 15%;
+    --muted-foreground: 35 10% 60%;
+
+    --accent: 168 50% 42%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 75% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 20 12% 20%;
+    --input: 20 12% 20%;
+    --ring: 14 70% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+    font-size: 15px;
+    line-height: 1.6;
+    letter-spacing: -0.01em;
+  }
+}
+
+@layer components {
+  /* Typography System */
+  .font-display {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+  }
+
+  .font-body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+  }
+
+  /* Refined hero section */
+  .gradient-hero {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+  }
+
+  /* Warm shadow system */
+  .shadow-glow {
+    box-shadow:
+      0 1px 2px hsl(20 20% 14% / 0.05),
+      0 2px 4px hsl(20 20% 14% / 0.05),
+      0 4px 12px hsl(16 65% 50% / 0.1);
+  }
+
+  .shadow-elevated {
+    box-shadow:
+      0 1px 1px hsl(20 20% 14% / 0.03),
+      0 2px 2px hsl(20 20% 14% / 0.03),
+      0 4px 4px hsl(20 20% 14% / 0.03),
+      0 8px 8px hsl(20 20% 14% / 0.03),
+      0 16px 16px hsl(20 20% 14% / 0.03);
+  }
+
+  /* Card hover - warm lift */
+  .card-hover {
+    @apply transition-all duration-300 ease-out;
+  }
+
+  .card-hover:hover {
+    box-shadow:
+      0 2px 4px hsl(20 20% 14% / 0.04),
+      0 4px 8px hsl(20 20% 14% / 0.04),
+      0 8px 16px hsl(20 20% 14% / 0.04),
+      0 16px 32px hsl(16 65% 50% / 0.06);
+  }
+
+  /* Venue type badges - vibrant, high contrast */
+  .badge-restaurant {
+    background-color: hsl(14 75% 45% / 0.12);
+    color: hsl(14 70% 38%);
+    border-color: hsl(14 75% 45% / 0.25);
+  }
+
+  .badge-cafe {
+    background-color: hsl(32 75% 42% / 0.12);
+    color: hsl(32 70% 32%);
+    border-color: hsl(32 75% 42% / 0.25);
+  }
+
+  .badge-shop {
+    background-color: hsl(275 50% 52% / 0.12);
+    color: hsl(275 45% 40%);
+    border-color: hsl(275 50% 52% / 0.25);
+  }
+
+  .badge-bar {
+    background-color: hsl(200 65% 42% / 0.12);
+    color: hsl(200 60% 32%);
+    border-color: hsl(200 65% 42% / 0.25);
+  }
+
+  /* Star rating */
+  .star-rating {
+    @apply flex gap-0.5;
+  }
+
+  .star {
+    @apply transition-all duration-200 cursor-pointer;
+    color: hsl(var(--star-empty));
+  }
+
+  .star.filled {
+    color: hsl(var(--star));
+  }
+
+  .star:hover {
+    transform: scale(1.1);
+  }
+
+  /* Refined animations */
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    opacity: 0;
+  }
+
+  @keyframes slide-in-right {
+    from {
+      opacity: 0;
+      transform: translateX(-12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .animate-slide-in {
+    animation: slide-in-right 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    opacity: 0;
+  }
+
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out forwards;
+  }
+
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+
+  .animate-pulse-soft {
+    animation: pulse-soft 2.5s ease-in-out infinite;
+  }
+
+  /* Map container */
+  .map-container {
+    @apply rounded-lg overflow-hidden;
+    border: 1px solid hsl(var(--border));
+  }
+
+  /* Minimal scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 2px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.3);
+  }
+
+  /* Glass effect */
+  .glass {
+    background: hsl(var(--background) / 0.92);
+    backdrop-filter: blur(20px) saturate(1.1);
+    -webkit-backdrop-filter: blur(20px) saturate(1.1);
+  }
+
+  /* Divider */
+  .market-divider {
+    @apply relative flex items-center gap-4;
+  }
+
+  .market-divider::before,
+  .market-divider::after {
+    content: "";
+    @apply flex-1 h-px bg-border;
+  }
+
+  /* Stagger delays */
+  .stagger-1 { animation-delay: 0.05s; }
+  .stagger-2 { animation-delay: 0.1s; }
+  .stagger-3 { animation-delay: 0.15s; }
+  .stagger-4 { animation-delay: 0.2s; }
+  .stagger-5 { animation-delay: 0.25s; }
+}
+
+/* Leaflet */
+.leaflet-container {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+}
+
+.leaflet-popup-content-wrapper {
+  @apply rounded-lg;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card)) !important;
+  box-shadow:
+    0 4px 6px -1px hsl(20 20% 14% / 0.06),
+    0 2px 4px -2px hsl(20 20% 14% / 0.04);
+}
+
+.leaflet-popup-content {
+  @apply text-foreground m-3;
+}
+
+.leaflet-popup-tip {
+  background: hsl(var(--card)) !important;
+}
+
+/* Loading skeleton */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  @apply rounded;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 0%,
+    hsl(var(--muted-foreground) / 0.06) 50%,
+    hsl(var(--muted)) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
