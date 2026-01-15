@@ -1,4 +1,7 @@
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/button";
+import { useAuth } from "../hooks/useAuth";
 
 function MapPinIcon({ className }: { className?: string }) {
   return (
@@ -26,9 +29,27 @@ function SparkleIcon({ className }: { className?: string }) {
 }
 
 export function LoginPage() {
+  const { isAuthenticated, signIn, loading } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (isAuthenticated && !loading) {
+      navigate("/");
+    }
+  }, [isAuthenticated, loading, navigate]);
+
   const handleLogin = () => {
-    window.location.href = "/api/auth/login";
+    signIn();
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[70vh]">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center min-h-[70vh]">

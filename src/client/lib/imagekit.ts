@@ -1,15 +1,7 @@
-const IMAGEKIT_URL = "https://ik.imagekit.io/d3vzx2z6w/reviews";
+const IMAGEKIT_URL = "https://ik.imagekit.io/d3vzx2z6w";
 
 /**
- * Generate an ImageKit URL with optional transforms.
- *
- * @param storageKey - The R2 storage key (e.g., "photos/v001/abc.jpg")
- * @param transforms - Optional ImageKit transform string (e.g., "w-400,h-300,fo-auto")
- * @returns The full ImageKit URL
- *
- * @example
- * imageKitUrl("photos/v001/abc.jpg", "w-200,h-200,fo-auto,q-80")
- * // => "https://ik.imagekit.io/d3vzx2z6w/reviews/photos/v001/abc.jpg?tr=w-200,h-200,fo-auto,q-80"
+ * Generate an ImageKit URL for R2 storage with optional transforms.
  */
 export function imageKitUrl(storageKey: string, transforms?: string): string {
   const tr = transforms ? `?tr=${transforms}` : "";
@@ -17,8 +9,13 @@ export function imageKitUrl(storageKey: string, transforms?: string): string {
 }
 
 /**
- * Common transform presets for venue photos.
+ * Get the optimized image URL via ImageKit.
+ * All photos should use R2 storage keys for ImageKit transforms.
  */
+export function getImageUrl(storageKey: string, transforms?: string): string {
+  return imageKitUrl(storageKey, transforms);
+}
+
 export const ImageKitTransforms = {
   /** Small square thumbnail (96x96) */
   thumbnailSmall: "w-96,h-96,fo-auto,q-80",

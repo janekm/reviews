@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import { Icon, type LatLng } from "leaflet";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { useAuth } from "../hooks/useAuth";
@@ -88,6 +90,8 @@ export function AddVenuePage() {
     null
   );
 
+  const createVenue = useMutation(api.venues.create);
+
   if (!user) {
     return (
       <div className="max-w-md mx-auto text-center py-16">
@@ -113,25 +117,16 @@ export function AddVenuePage() {
     setError(null);
 
     try {
-      const res = await fetch("/api/venues", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          type,
-          address: address || undefined,
-          description: description || undefined,
-          latitude: location?.lat,
-          longitude: location?.lng,
-        }),
+      const venueId = await createVenue({
+        name,
+        type,
+        address: address || "",
+        description: description || undefined,
+        latitude: location?.lat,
+        longitude: location?.lng,
       });
 
-      if (!res.ok) {
-        throw new Error("Failed to create venue");
-      }
-
-      const { id } = (await res.json()) as { id: string };
-      navigate(`/venue/${id}`);
+      navigate(`/venue/${venueId}`);
     } catch {
       setError("Failed to create venue. Please try again.");
     } finally {

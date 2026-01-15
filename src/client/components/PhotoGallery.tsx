@@ -1,19 +1,43 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback } from "react";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { PhotoGrid } from "./PhotoGrid";
-import type { PhotoWithUser } from "../../shared/types";
+
+interface Photo {
+  _id: Id<"photos">;
+  _creationTime: number;
+  venueId: Id<"venues">;
+  reviewId?: Id<"reviews">;
+  userId: Id<"users">;
+  storageId?: Id<"_storage">;
+  storageKey: string;
+  originalFilename?: string;
+  caption?: string;
+  createdAt: number;
+  url: string | null;
+  uploader: {
+    _id: Id<"users">;
+    name?: string;
+    email: string;
+  };
+  canDelete: boolean;
+}
 
 interface PhotoGalleryProps {
-  venueId: string;
+  venueId: Id<"venues">;
+  photos: Photo[];
   canDelete?: boolean;
-  currentUserId?: string;
+  currentUserId?: Id<"users">;
   userRole?: string;
-  venueCreatorId?: string | null;
-  mainPhotoId?: string | null;
+  venueCreatorId?: Id<"users"> | null;
+  mainPhotoId?: Id<"photos"> | null;
   onMainPhotoChange?: () => void;
 }
 
 export function PhotoGallery({
   venueId,
+  photos,
   canDelete = false,
   currentUserId,
   userRole,
@@ -21,21 +45,13 @@ export function PhotoGallery({
   mainPhotoId,
   onMainPhotoChange,
 }: PhotoGalleryProps) {
-  const [photos, setPhotos] = useState<PhotoWithUser[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`/api/photos/venues/${venueId}`)
-      .then((res) => res.json() as Promise<PhotoWithUser[]>)
-      .then((data) => {
-        setPhotos(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [venueId]);
+  const deletePhoto = useMutation(api.photos.remove);
+  const setMainPhoto = useMutation(api.venues.setMainPhoto);
 
   const canDeletePhoto = useCallback(
-    (photo: PhotoWithUser) => {
+    (photo: Photo) => {
+      // Use the canDelete flag from the server if available
+      if (photo.canDelete) return true;
       if (!canDelete || !currentUserId) return false;
       // Photo owner can delete
       if (photo.userId === currentUserId) return true;
@@ -49,17 +65,14 @@ export function PhotoGallery({
   );
 
   const handleDelete = useCallback(
-    async (photoId: string) => {
-      const res = await fetch(`/api/photos/${photoId}`, { method: "DELETE" });
-      if (res.ok) {
-        setPhotos((prev) => prev.filter((p) => p.id !== photoId));
-      }
+    async (photoId: Id<"photos">) => {
+      await deletePhoto({ id: photoId });
     },
-    []
+    [deletePhoto]
   );
 
   const canSetMainPhoto = useCallback(
-    (_photo: PhotoWithUser) => {
+    (_photo: Photo) => {
       if (!currentUserId) return false;
       // Venue creator can set main photo
       if (venueCreatorId && venueCreatorId === currentUserId) return true;
@@ -71,32 +84,12 @@ export function PhotoGallery({
   );
 
   const handleSetMain = useCallback(
-    async (photoId: string) => {
-      const res = await fetch(`/api/venues/${venueId}/main-photo`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photoId }),
-      });
-      if (res.ok) {
-        onMainPhotoChange?.();
-      }
+    async (photoId: Id<"photos">) => {
+      await setMainPhoto({ venueId, photoId });
+      onMainPhotoChange?.();
     },
-    [venueId, onMainPhotoChange]
+    [venueId, setMainPhoto, onMainPhotoChange]
   );
-
-  if (loading) {
-    return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {[...Array(4)].map((_, i) => (
-          <div
-            key={i}
-            className="aspect-square skeleton rounded-xl"
-            style={{ animationDelay: `${i * 0.1}s` }}
-          />
-        ))}
-      </div>
-    );
-  }
 
   return (
     <PhotoGrid

@@ -1,21 +1,9 @@
-import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "../components/ui/button";
-import { imageKitUrl, ImageKitTransforms } from "../lib/imagekit";
 import { useAuth } from "../hooks/useAuth";
-import type { Venue } from "../../shared/types";
-
-interface FavoriteWithVenue {
-  id: string;
-  venueId: string;
-  createdAt: number;
-  venue: {
-    id: string;
-    name: string;
-    type: string;
-    address: string | null;
-  };
-}
 
 const TYPE_CONFIG: Record<string, { label: string; emoji: string; badgeClass: string }> = {
   restaurant: { label: "Restaurant", emoji: "🍽️", badgeClass: "badge-restaurant" },
@@ -99,31 +87,14 @@ function FavoriteCardSkeleton() {
 
 export function FavoritesPage() {
   const { user, loading: authLoading } = useAuth();
-  const [favorites, setFavorites] = useState<FavoriteWithVenue[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [removing, setRemoving] = useState<string | null>(null);
+  const favorites = useQuery(api.favorites.listMine);
+  const removeFavorite = useMutation(api.favorites.remove);
 
-  useEffect(() => {
-    if (!user) return;
-
-    fetch("/api/favorites")
-      .then((res) => res.json())
-      .then((data: FavoriteWithVenue[]) => {
-        setFavorites(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [user]);
-
-  const handleRemove = async (venueId: string) => {
-    setRemoving(venueId);
+  const handleRemove = async (venueId: Id<"venues">) => {
     try {
-      await fetch(`/api/favorites/${venueId}`, { method: "DELETE" });
-      setFavorites((prev) => prev.filter((f) => f.venueId !== venueId));
+      await removeFavorite({ venueId });
     } catch (err) {
       console.error("Failed to remove favorite:", err);
-    } finally {
-      setRemoving(null);
     }
   };
 
@@ -131,6 +102,8 @@ export function FavoritesPage() {
   if (!authLoading && !user) {
     return <Navigate to="/login" replace />;
   }
+
+  const loading = favorites === undefined;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -151,7 +124,7 @@ export function FavoritesPage() {
             <div>
               <h1 className="font-display text-2xl font-semibold">Saved Venues</h1>
               <p className="text-sm text-muted-foreground">
-                {favorites.length} {favorites.length === 1 ? "venue" : "venues"} saved
+                {favorites?.length ?? 0} {favorites?.length === 1 ? "venue" : "venues"} saved
               </p>
             </div>
           </div>
@@ -182,11 +155,11 @@ export function FavoritesPage() {
         <div className="space-y-3">
           {favorites.map((fav) => (
             <div
-              key={fav.id}
+              key={fav._id}
               className="rounded-xl border border-border/50 bg-card p-4 hover:border-primary/30 transition-all duration-200"
             >
               <div className="flex items-start justify-between gap-4">
-                <Link to={`/venue/${fav.venue.id}`} className="flex-1 min-w-0">
+                <Link to={`/venue/${fav.venue._id}`} className="flex-1 min-w-0">
                   <div className="flex items-start gap-3">
                     <div className="text-2xl">
                       {TYPE_CONFIG[fav.venue.type]?.emoji || "📍"}
@@ -211,11 +184,10 @@ export function FavoritesPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() => handleRemove(fav.venueId)}
-                  disabled={removing === fav.venueId}
                   className="text-rose-500 hover:text-rose-600 hover:bg-rose-50 shrink-0"
                 >
                   <HeartIcon className="w-4 h-4 mr-1" filled />
-                  {removing === fav.venueId ? "Removing..." : "Remove"}
+                  Remove
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground/70 mt-3 pl-9">

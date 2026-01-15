@@ -1,4 +1,7 @@
 import { useState, useRef, useCallback } from "react";
+import { useMutation, useAction } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
@@ -55,8 +58,8 @@ function ImageIcon({ className }: { className?: string }) {
 }
 
 interface PhotoUploadProps {
-  venueId: string;
-  reviewId?: string;
+  venueId: Id<"venues">;
+  reviewId?: Id<"reviews">;
   onUploadComplete: () => void;
   onCancel: () => void;
   compact?: boolean;
@@ -74,6 +77,9 @@ export function PhotoUpload({ venueId, reviewId, onUploadComplete, onCancel, com
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const generateUploadUrl = useMutation(api.photos.generateUploadUrl);
+  const uploadPhotoToR2 = useAction(api.photos.uploadPhotoToR2);
 
   const validateFile = (f: File): string | null => {
     if (!ALLOWED_TYPES.includes(f.type)) {
@@ -147,31 +153,33 @@ export function PhotoUpload({ venueId, reviewId, onUploadComplete, onCancel, com
     setUploadProgress(0);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      if (caption.trim()) {
-        formData.append("caption", caption.trim());
-      }
+      // Step 1: Get a signed upload URL from Convex
+      setUploadProgress(10);
+      const uploadUrl = await generateUploadUrl();
 
-      // Simulate progress for UX (actual XHR would use onprogress)
-      const progressInterval = setInterval(() => {
-        setUploadProgress((p) => Math.min(p + 10, 90));
-      }, 200);
-
-      const uploadUrl = reviewId
-        ? `/api/photos/reviews/${reviewId}`
-        : `/api/photos/venues/${venueId}`;
-      const res = await fetch(uploadUrl, {
+      // Step 2: Upload the file directly to Convex storage
+      setUploadProgress(30);
+      const result = await fetch(uploadUrl, {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": file.type },
+        body: file,
       });
 
-      clearInterval(progressInterval);
-
-      if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        throw new Error(data.error || "Upload failed");
+      if (!result.ok) {
+        throw new Error("Failed to upload file to storage");
       }
+
+      const { storageId } = (await result.json()) as { storageId: Id<"_storage"> };
+      setUploadProgress(50);
+
+      // Step 3: Upload to R2 and save photo record
+      await uploadPhotoToR2({
+        venueId,
+        reviewId,
+        storageId,
+        originalFilename: file.name,
+        caption: caption.trim() || undefined,
+      });
 
       setUploadProgress(100);
 

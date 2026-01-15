@@ -1,46 +1,39 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import type { User } from "../../shared/types";
+import { useAuth as useWorkOSAuth } from "@workos-inc/authkit-react";
+import { useConvexAuth, useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 
-interface AuthContextType {
-  user: User | null;
-  loading: boolean;
-  logout: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextType | null>(null);
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((res) => res.json() as Promise<{ user: User | null }>)
-      .then((data) => {
-        setUser(data.user);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLoading(false);
-      });
-  }, []);
-
-  const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    setUser(null);
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, loading, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
+// Re-export user type for compatibility
+export type { Doc } from "../../../convex/_generated/dataModel";
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+  const { isAuthenticated, isLoading: convexLoading } = useConvexAuth();
+  const { user: workosUser, signIn, signOut, isLoading: authKitLoading } = useWorkOSAuth();
+
+  // Get our user record from Convex
+  const convexUser = useQuery(api.users.getCurrentUser);
+
+  // Loading is true while either auth system is loading, or while we're fetching the user
+  const loading = convexLoading || authKitLoading || (isAuthenticated && convexUser === undefined);
+
+  return {
+    user: convexUser ?? null,
+    workosUser,
+    loading,
+    isAuthenticated,
+    signIn,
+    signOut,
+  };
+}
+
+// For backwards compatibility - components can check if user has minimum role
+export function hasMinRole(userRole: string | undefined, minRole: string): boolean {
+  const roleHierarchy: Record<string, number> = {
+    viewer: 0,
+    user: 1,
+    editor: 2,
+    admin: 3,
+  };
+
+  if (!userRole) return false;
+  return (roleHierarchy[userRole] ?? 0) >= (roleHierarchy[minRole] ?? 0);
 }

@@ -1,14 +1,13 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Layout } from "./components/Layout";
-
-// Lazy load pages - especially those with maps (Leaflet is heavy)
-const HomePage = lazy(() => import("./pages/HomePage").then(m => ({ default: m.HomePage })));
-const VenuePage = lazy(() => import("./pages/VenuePage").then(m => ({ default: m.VenuePage })));
-const AddVenuePage = lazy(() => import("./pages/AddVenuePage").then(m => ({ default: m.AddVenuePage })));
-const LoginPage = lazy(() => import("./pages/LoginPage").then(m => ({ default: m.LoginPage })));
-const AdminPage = lazy(() => import("./pages/AdminPage").then(m => ({ default: m.AdminPage })));
-const FavoritesPage = lazy(() => import("./pages/FavoritesPage").then(m => ({ default: m.FavoritesPage })));
+import { HomePage } from "./pages/HomePage";
+import { VenuePage } from "./pages/VenuePage";
+import { AddVenuePage } from "./pages/AddVenuePage";
+import { LoginPage } from "./pages/LoginPage";
+import { AdminPage } from "./pages/AdminPage";
+import { FavoritesPage } from "./pages/FavoritesPage";
+import { CallbackPage } from "./pages/CallbackPage";
 
 function PageLoader() {
   return (
@@ -29,6 +28,7 @@ export default function App() {
           <Route path="login" element={<LoginPage />} />
           <Route path="favorites" element={<FavoritesPage />} />
           <Route path="admin" element={<AdminPage />} />
+          <Route path="callback" element={<CallbackPage />} />
         </Route>
       </Routes>
     </Suspense>

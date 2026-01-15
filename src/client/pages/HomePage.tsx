@@ -1,34 +1,15 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import { Icon } from "leaflet";
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { Button } from "../components/ui/button";
-import { imageKitUrl, ImageKitTransforms } from "../lib/imagekit";
+import { getImageUrl, ImageKitTransforms } from "../lib/imagekit";
 import { useAuth } from "../hooks/useAuth";
-import { Avatar, AvatarImage, AvatarFallback } from "../components/ui/avatar";
-import type { Venue, VenueType } from "../../shared/types";
+import type { Id } from "../../../convex/_generated/dataModel";
 
-interface ActivityItem {
-  id: string;
-  type: "review";
-  createdAt: number;
-  review: {
-    id: string;
-    rating: number;
-    title: string | null;
-    content: string | null;
-  };
-  user: {
-    id: string;
-    name: string | null;
-    avatarUrl: string | null;
-  } | null;
-  venue: {
-    id: string;
-    name: string;
-    type: string;
-  };
-}
+type VenueType = "restaurant" | "cafe" | "shop" | "bar";
 
 const SPITALFIELDS_CENTER: [number, number] = [51.5197, -0.0754];
 
@@ -87,41 +68,6 @@ function PlusIcon({ className }: { className?: string }) {
       strokeLinejoin="round"
     >
       <path d="M12 5v14M5 12h14" />
-    </svg>
-  );
-}
-
-function MapPinIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
-      <circle cx="12" cy="10" r="3" />
-    </svg>
-  );
-}
-
-function ExternalLinkIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-      <polyline points="15 3 21 3 21 9" />
-      <line x1="10" y1="14" x2="21" y2="3" />
     </svg>
   );
 }
@@ -187,62 +133,28 @@ function VenueCardSkeleton() {
 }
 
 export function HomePage() {
-  const { user } = useAuth();
-  const [venues, setVenues] = useState<Venue[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user, isAuthenticated } = useAuth();
   const [selectedType, setSelectedType] = useState<VenueType | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
-  const [favoriteVenueIds, setFavoriteVenueIds] = useState<Set<string>>(new Set());
-  const [loadingFavorites, setLoadingFavorites] = useState(false);
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const [loadingActivity, setLoadingActivity] = useState(true);
 
-  useEffect(() => {
-    fetch("/api/venues")
-      .then((res) => res.json() as Promise<Venue[]>)
-      .then((data) => {
-        setVenues(data);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
-
-  // Fetch favorites when user is logged in
-  useEffect(() => {
-    if (!user) {
-      setFavoriteVenueIds(new Set());
-      return;
-    }
-
-    setLoadingFavorites(true);
-    fetch("/api/favorites")
-      .then((res) => res.json())
-      .then((data: { venueId: string }[]) => {
-        setFavoriteVenueIds(new Set(data.map((f) => f.venueId)));
-      })
-      .catch(() => setFavoriteVenueIds(new Set()))
-      .finally(() => setLoadingFavorites(false));
-  }, [user]);
+  // Fetch venues with Convex - real-time updates!
+  const venues = useQuery(api.venues.list, {
+    type: selectedType ?? undefined,
+    favoritesOnly: showFavorites,
+  });
 
   // Fetch recent activity
-  useEffect(() => {
-    fetch("/api/activity?limit=8")
-      .then((res) => res.json())
-      .then((data: ActivityItem[]) => {
-        setActivity(data);
-        setLoadingActivity(false);
-      })
-      .catch(() => setLoadingActivity(false));
-  }, []);
+  const activity = useQuery(api.activity.listRecent, { limit: 8 });
 
-  const filteredVenues = showFavorites
-    ? venues.filter((v) => favoriteVenueIds.has(v.id))
-    : selectedType
-      ? venues.filter((v) => v.type === selectedType)
-      : venues;
+  // Get favorite count for display
+  const favoriteIds = useQuery(api.favorites.getMyFavoriteIds);
 
+  const loading = venues === undefined;
+  const loadingActivity = activity === undefined;
+
+  const filteredVenues = venues ?? [];
   const venuesWithLocation = filteredVenues.filter(
-    (v) => v.latitude !== null && v.longitude !== null
+    (v) => v.latitude !== null && v.latitude !== undefined && v.longitude !== null && v.longitude !== undefined
   );
 
   return (
@@ -280,11 +192,10 @@ export function HomePage() {
           }`}
         >
           All
-          <span className="ml-1.5 text-xs opacity-70">{venues.length}</span>
+          <span className="ml-1.5 text-xs opacity-70">{venues?.length ?? 0}</span>
         </button>
         {VENUE_TYPES.map((type) => {
           const config = TYPE_CONFIG[type];
-          const count = venues.filter((v) => v.type === type).length;
           return (
             <button
               key={type}
@@ -299,11 +210,10 @@ export function HomePage() {
               }`}
             >
               {config.label}
-              <span className="ml-1.5 text-xs opacity-70">{count}</span>
             </button>
           );
         })}
-        {user && (
+        {isAuthenticated && (
           <button
             onClick={() => {
               setShowFavorites(!showFavorites);
@@ -317,7 +227,7 @@ export function HomePage() {
           >
             <HeartIcon className="w-3.5 h-3.5" filled={showFavorites} />
             Saved
-            <span className="text-xs opacity-70">{favoriteVenueIds.size}</span>
+            <span className="text-xs opacity-70">{favoriteIds?.length ?? 0}</span>
           </button>
         )}
       </div>
@@ -357,17 +267,17 @@ export function HomePage() {
             <div className="space-y-2">
               {filteredVenues.map((venue, index) => (
                 <Link
-                  key={venue.id}
-                  to={`/venue/${venue.id}`}
+                  key={venue._id}
+                  to={`/venue/${venue._id}`}
                   className="group block bg-card border border-border rounded-lg overflow-hidden card-hover animate-fade-in-up"
                   style={{ animationDelay: `${index * 0.02}s` }}
                 >
                   <div className="flex">
                     {/* Thumbnail */}
-                    {venue.photoStorageKey && (
+                    {venue.mainPhotoStorageKey && (
                       <div className="w-24 shrink-0 bg-muted">
                         <img
-                          src={imageKitUrl(venue.photoStorageKey, ImageKitTransforms.venueListCard)}
+                          src={getImageUrl(venue.mainPhotoStorageKey, ImageKitTransforms.venueListCard)}
                           alt=""
                           className="w-full h-full object-cover"
                           loading="lazy"
@@ -418,16 +328,16 @@ export function HomePage() {
               />
               {venuesWithLocation.map((venue) => (
                 <Marker
-                  key={venue.id}
+                  key={venue._id}
                   position={[venue.latitude!, venue.longitude!]}
                   icon={venueIcon}
                 >
                   <Popup>
                     <div className="min-w-52">
-                      {venue.photoStorageKey && (
+                      {venue.mainPhotoStorageKey && (
                         <div className="w-full h-28 -mx-[1px] -mt-[1px] mb-3 rounded-t overflow-hidden">
                           <img
-                            src={imageKitUrl(venue.photoStorageKey, ImageKitTransforms.mapPopup)}
+                            src={getImageUrl(venue.mainPhotoStorageKey, ImageKitTransforms.mapPopup)}
                             alt=""
                             className="w-full h-full object-cover"
                           />
@@ -446,7 +356,7 @@ export function HomePage() {
                         </p>
                       )}
                       <Link
-                        to={`/venue/${venue.id}`}
+                        to={`/venue/${venue._id}`}
                         className="inline-block mt-3 text-sm font-medium text-primary hover:underline"
                       >
                         View details →
@@ -463,8 +373,8 @@ export function HomePage() {
       {/* Recent Activity */}
       <div className="mt-12 pt-8 border-t border-border">
         <div className="flex items-baseline justify-between mb-6">
-          <h2 className="font-display text-2xl text-foreground">Recent Reviews</h2>
-          <span className="text-sm text-muted-foreground">{activity.length} latest</span>
+          <h2 className="font-display text-2xl text-foreground">Recent Activity</h2>
+          <span className="text-sm text-muted-foreground">{activity?.length ?? 0} latest</span>
         </div>
 
         {loadingActivity ? (
@@ -477,16 +387,16 @@ export function HomePage() {
               </div>
             ))}
           </div>
-        ) : activity.length === 0 ? (
+        ) : !activity || activity.length === 0 ? (
           <div className="border border-dashed border-border rounded-lg p-10 text-center">
-            <p className="text-muted-foreground text-sm">No reviews yet</p>
+            <p className="text-muted-foreground text-sm">No activity yet</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {activity.map((item) => (
               <Link
-                key={item.id}
-                to={`/venue/${item.venue.id}`}
+                key={item._id}
+                to={`/venue/${item.venueId}`}
                 className="group block border border-border rounded-lg p-4 hover:border-foreground/20 transition-colors"
               >
                 <div className="flex items-center justify-between mb-2">
@@ -496,27 +406,16 @@ export function HomePage() {
                       month: "short",
                     })}
                   </span>
-                  <div className="flex items-center gap-0.5">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <StarIcon
-                        key={star}
-                        className={`w-3 h-3 ${star <= item.review.rating ? "text-amber-500" : "text-border"}`}
-                        filled={star <= item.review.rating}
-                      />
-                    ))}
-                  </div>
+                  <span className="text-xs px-2 py-0.5 bg-muted rounded-full">
+                    {item.actionType.replace("_", " ")}
+                  </span>
                 </div>
                 <p className="font-medium text-foreground group-hover:text-accent transition-colors mb-1">
                   {item.venue.name}
                 </p>
-                <p className="text-xs text-muted-foreground mb-2">
-                  by {item.user?.name ?? "Anonymous"}
+                <p className="text-xs text-muted-foreground">
+                  by {item.user?.name ?? item.user?.email ?? "Anonymous"}
                 </p>
-                {item.review.content && (
-                  <p className="text-sm text-muted-foreground line-clamp-3 leading-relaxed">
-                    {item.review.content}
-                  </p>
-                )}
               </Link>
             ))}
           </div>

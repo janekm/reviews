@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { useAuth } from "../hooks/useAuth";
 
 export function Layout() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, signOut } = useAuth();
   const location = useLocation();
 
   return (
@@ -56,16 +56,16 @@ export function Layout() {
                 <Avatar className="h-7 w-7">
                   <AvatarImage src={user.avatarUrl ?? undefined} />
                   <AvatarFallback className="bg-muted text-muted-foreground text-xs font-medium">
-                    {user.name?.[0] ?? user.email[0].toUpperCase()}
+                    {user.name?.[0] ?? user.email?.[0]?.toUpperCase() ?? "?"}
                   </AvatarFallback>
                 </Avatar>
                 <span className="text-sm hidden sm:block max-w-28 truncate text-muted-foreground">
-                  {user.name ?? user.email}
+                  {user.name ?? user.email ?? "User"}
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={logout}
+                  onClick={() => signOut()}
                   className="text-xs text-muted-foreground hover:text-foreground"
                 >
                   Sign out

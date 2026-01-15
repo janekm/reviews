@@ -1,0 +1,42 @@
+[
+  {
+    "results": [
+      {
+        "id": "2f2859e6-2779-46ae-9018-5581ce7065b7",
+        "workos_id": "user_01KEMW8APTWX2TMK3GT37SDA7W",
+        "email": "janekm@gmail.com",
+        "name": "Janek Mann",
+        "avatar_url": "https://workoscdn.com/images/v1/URZKlM7YYFC671RM1aF5iO6suTZbsBdijFaii9nv33A",
+        "created_at": 1768144841,
+        "role": "admin"
+      },
+      {
+        "id": "15a89413-8b75-4cce-b9e2-9050b8ad2205",
+        "workos_id": "user_01KEY8K3GVZCRN01SP3J8WJ7SB",
+        "email": "piotr.myskow94@gmail.com",
+        "name": "Piotr Myśków",
+        "avatar_url": "https://workoscdn.com/images/v1/Z025mHM7OXz0ucJdSYcmSSg8BuAA0VZbtsfw0bTdHis",
+        "created_at": 1768394690,
+        "role": "editor"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "WEUR",
+      "served_by_colo": "AMS",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.323
+      },
+      "duration": 0.323,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 126976,
+      "rows_read": 2,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]

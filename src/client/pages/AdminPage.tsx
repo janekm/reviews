@@ -1,9 +1,13 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { useAuth } from "../hooks/useAuth";
 import { Button } from "../components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
-import type { User, UserRole } from "../../shared/types";
+
+type UserRole = "viewer" | "user" | "editor" | "admin";
 
 function ShieldIcon({ className }: { className?: string }) {
   return (
@@ -80,90 +84,30 @@ const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
 export function AdminPage() {
   const { user: currentUser, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
-  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+
+  const users = useQuery(api.users.list);
+  const updateRoleMutation = useMutation(api.users.updateRole);
 
   const canAccess =
     currentUser && (currentUser.role === "editor" || currentUser.role === "admin");
 
-  useEffect(() => {
-    if (!authLoading && !canAccess) {
-      navigate("/");
-      return;
-    }
-
-    if (canAccess) {
-      fetchUsers();
-    }
-  }, [authLoading, canAccess, navigate]);
-
-  async function fetchUsers() {
-    try {
-      const res = await fetch("/api/users");
-      if (!res.ok) {
-        throw new Error("Failed to fetch users");
-      }
-      const data = await res.json();
-      setUsers(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load users");
-    } finally {
-      setLoading(false);
-    }
+  // Redirect if not authorized
+  if (!authLoading && !canAccess) {
+    navigate("/");
+    return null;
   }
 
-  async function updateRole(userId: string, newRole: UserRole) {
-    setUpdatingUserId(userId);
+  async function updateRole(userId: Id<"users">, newRole: UserRole) {
     try {
-      const res = await fetch(`/api/users/${userId}/role`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: newRole }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to update role");
-      }
-
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
-      );
+      await updateRoleMutation({ userId, role: newRole });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update role");
-    } finally {
-      setUpdatingUserId(null);
-    }
-  }
-
-  async function deleteUser(userId: string, userName: string) {
-    if (!confirm(`Delete user "${userName}"? This will also delete all their venues, reviews, and photos. This cannot be undone.`)) {
-      return;
-    }
-
-    setDeletingUserId(userId);
-    try {
-      const res = await fetch(`/api/users/${userId}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to delete user");
-      }
-
-      setUsers((prev) => prev.filter((u) => u.id !== userId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete user");
-    } finally {
-      setDeletingUserId(null);
     }
   }
 
   const isAdmin = currentUser?.role === "admin";
+  const loading = users === undefined;
 
   const availableRoles: UserRole[] =
     currentUser?.role === "admin"
@@ -217,7 +161,7 @@ export function AdminPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {(["viewer", "user", "editor", "admin"] as UserRole[]).map((role) => {
-            const count = users.filter((u) => u.role === role).length;
+            const count = (users ?? []).filter((u) => u.role === role).length;
             return (
               <div
                 key={role}
@@ -253,19 +197,18 @@ export function AdminPage() {
             <div className="flex items-center gap-2">
               <UsersIcon className="w-5 h-5 text-primary" />
               <h2 className="font-semibold text-foreground">
-                All Users ({users.length})
+                All Users ({users?.length ?? 0})
               </h2>
             </div>
           </div>
 
           <div className="divide-y divide-border/50">
-            {users.map((user) => {
-              const isCurrentUser = user.id === currentUser?.id;
-              const isUpdating = updatingUserId === user.id;
+            {(users ?? []).map((user) => {
+              const isCurrentUser = user._id === currentUser?._id;
 
               return (
                 <div
-                  key={user.id}
+                  key={user._id}
                   className={`p-4 flex items-center gap-4 transition-colors ${
                     isCurrentUser ? "bg-primary/5" : "hover:bg-muted/30"
                   }`}
@@ -307,13 +250,12 @@ export function AdminPage() {
                       {ROLE_LABELS[user.role]}
                     </div>
 
-                    {!isCurrentUser && (
+                    {!isCurrentUser && isAdmin && (
                       <select
                         value={user.role}
                         onChange={(e) =>
-                          updateRole(user.id, e.target.value as UserRole)
+                          updateRole(user._id, e.target.value as UserRole)
                         }
-                        disabled={isUpdating}
                         className="px-3 py-2 rounded-lg border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50 cursor-pointer"
                         title="Change role"
                       >
@@ -329,20 +271,6 @@ export function AdminPage() {
                       <span className="text-xs text-muted-foreground italic">
                         Cannot change own role
                       </span>
-                    )}
-
-                    {/* Delete button - admin only, not for self */}
-                    {isAdmin && !isCurrentUser && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteUser(user.id, user.name ?? user.email)}
-                        disabled={deletingUserId === user.id}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        title="Delete user"
-                      >
-                        <TrashIcon className="w-4 h-4" />
-                      </Button>
                     )}
                   </div>
                 </div>

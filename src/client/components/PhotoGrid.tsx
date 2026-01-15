@@ -2,8 +2,22 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { Button } from "./ui/button";
-import { imageKitUrl, ImageKitTransforms } from "../lib/imagekit";
-import type { PhotoWithUser } from "../../shared/types";
+import { getImageUrl, ImageKitTransforms } from "../lib/imagekit";
+
+interface Photo {
+  _id: string;
+  reviewId?: string;
+  storageKey: string;
+  url: string | null;
+  caption?: string;
+  createdAt: number;
+  uploader: {
+    _id: string;
+    name?: string;
+    email: string;
+  };
+  canDelete: boolean;
+}
 
 function XIcon({ className }: { className?: string }) {
   return (
@@ -88,11 +102,11 @@ function StarIcon({ className }: { className?: string }) {
 export type PhotoGridSize = "small" | "medium" | "large";
 
 interface PhotoGridProps {
-  photos: PhotoWithUser[];
+  photos: Photo[];
   size?: PhotoGridSize;
-  canDelete?: (photo: PhotoWithUser) => boolean;
+  canDelete?: (photo: Photo) => boolean;
   onDelete?: (photoId: string) => Promise<void>;
-  canSetMain?: (photo: PhotoWithUser) => boolean;
+  canSetMain?: (photo: Photo) => boolean;
   onSetMain?: (photoId: string) => Promise<void>;
   mainPhotoId?: string | null;
   emptyMessage?: string;
@@ -116,6 +130,12 @@ const sizeConfig = {
     transform: ImageKitTransforms.galleryThumb,
   },
 };
+
+// Helper to get photo URL via ImageKit (R2 storage)
+function getPhotoUrl(photo: Photo, transform?: string): string {
+  // Always use storageKey for ImageKit transforms
+  return getImageUrl(photo.storageKey, transform);
+}
 
 export function PhotoGrid({
   photos,
@@ -166,7 +186,7 @@ export function PhotoGrid({
       await onDelete(photoId);
       // Close lightbox if we deleted the current photo
       if (lightboxIndex !== null) {
-        const deletedIndex = photos.findIndex((p) => p.id === photoId);
+        const deletedIndex = photos.findIndex((p) => p._id === photoId);
         if (deletedIndex === lightboxIndex) {
           setLightboxIndex(null);
         } else if (deletedIndex < lightboxIndex) {
@@ -211,12 +231,12 @@ export function PhotoGrid({
       <div className={config.grid}>
         {photos.map((photo, index) => (
           <button
-            key={photo.id}
+            key={photo._id}
             onClick={() => setLightboxIndex(index)}
             className={`group relative ${config.thumbnail} rounded-xl overflow-hidden bg-muted focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2`}
           >
             <img
-              src={imageKitUrl(photo.storageKey, config.transform)}
+              src={getPhotoUrl(photo, config.transform)}
               alt={photo.caption || "Photo"}
               className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
               loading="lazy"
@@ -224,17 +244,16 @@ export function PhotoGrid({
             {/* Hover overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             {/* Photo info on hover */}
-            {showUserInfo && photo.user && size !== "small" && (
+            {showUserInfo && photo.uploader && size !== "small" && (
               <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
                 <div className="flex items-center gap-2">
                   <Avatar className="h-6 w-6 border-2 border-white/30">
-                    <AvatarImage src={photo.user.avatarUrl ?? undefined} />
                     <AvatarFallback className="text-[10px] bg-primary/80 text-white">
-                      {photo.user.name?.[0] ?? "?"}
+                      {photo.uploader.name?.[0] ?? photo.uploader.email[0].toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <span className="text-xs text-white font-medium truncate">
-                    {photo.user.name}
+                    {photo.uploader.name ?? photo.uploader.email}
                   </span>
                 </div>
               </div>
@@ -287,7 +306,7 @@ export function PhotoGrid({
             onClick={(e) => e.stopPropagation()}
           >
             <img
-              src={imageKitUrl(currentPhoto.storageKey, ImageKitTransforms.fullSize)}
+              src={getPhotoUrl(currentPhoto, ImageKitTransforms.fullSize)}
               alt={currentPhoto.caption || "Photo"}
               className="w-full h-full object-contain rounded-lg"
             />
@@ -295,17 +314,16 @@ export function PhotoGrid({
             {/* Photo metadata bar */}
             <div className="mt-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                {currentPhoto.user && (
+                {currentPhoto.uploader && (
                   <>
                     <Avatar className="h-8 w-8 border-2 border-white/30">
-                      <AvatarImage src={currentPhoto.user.avatarUrl ?? undefined} />
                       <AvatarFallback className="text-xs bg-primary/80 text-white">
-                        {currentPhoto.user.name?.[0] ?? "?"}
+                        {currentPhoto.uploader.name?.[0] ?? currentPhoto.uploader.email[0].toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div>
                       <p className="text-white font-medium text-sm">
-                        {currentPhoto.user.name}
+                        {currentPhoto.uploader.name ?? currentPhoto.uploader.email}
                       </p>
                       <p className="text-white/60 text-xs">
                         {new Date(currentPhoto.createdAt).toLocaleDateString("en-GB", {
@@ -332,16 +350,16 @@ export function PhotoGrid({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleSetMain(currentPhoto.id)}
-                    disabled={settingMain === currentPhoto.id || mainPhotoId === currentPhoto.id}
-                    className={mainPhotoId === currentPhoto.id
+                    onClick={() => handleSetMain(currentPhoto._id)}
+                    disabled={settingMain === currentPhoto._id || mainPhotoId === currentPhoto._id}
+                    className={mainPhotoId === currentPhoto._id
                       ? "text-amber-400 hover:bg-amber-500/20"
                       : "text-white/70 hover:text-amber-400 hover:bg-amber-500/20"}
                   >
-                    <StarIcon className={`w-4 h-4 mr-1 ${mainPhotoId === currentPhoto.id ? "fill-amber-400" : ""}`} />
-                    {settingMain === currentPhoto.id
+                    <StarIcon className={`w-4 h-4 mr-1 ${mainPhotoId === currentPhoto._id ? "fill-amber-400" : ""}`} />
+                    {settingMain === currentPhoto._id
                       ? "Setting..."
-                      : mainPhotoId === currentPhoto.id
+                      : mainPhotoId === currentPhoto._id
                         ? "Main Photo"
                         : "Set as Main"}
                   </Button>
@@ -350,12 +368,12 @@ export function PhotoGrid({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleDelete(currentPhoto.id)}
-                    disabled={deleting === currentPhoto.id}
+                    onClick={() => handleDelete(currentPhoto._id)}
+                    disabled={deleting === currentPhoto._id}
                     className="text-red-400 hover:text-red-300 hover:bg-red-500/20"
                   >
                     <TrashIcon className="w-4 h-4 mr-1" />
-                    {deleting === currentPhoto.id ? "Deleting..." : "Delete"}
+                    {deleting === currentPhoto._id ? "Deleting..." : "Delete"}
                   </Button>
                 )}
               </div>
