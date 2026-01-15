@@ -18,6 +18,15 @@
         "avatar_url": "https://workoscdn.com/images/v1/Z025mHM7OXz0ucJdSYcmSSg8BuAA0VZbtsfw0bTdHis",
         "created_at": 1768394690,
         "role": "editor"
+      },
+      {
+        "id": "aa7230b5-cf67-43c9-a5ee-1e576318c407",
+        "workos_id": "user_01KF0H5HP0T8H37T3E01W1KJZK",
+        "email": "simon.cotts@knaufenergy.com",
+        "name": "Simon Cotts-Sevilha",
+        "avatar_url": null,
+        "created_at": 1768471131,
+        "role": "editor"
       }
     ],
     "success": true,
@@ -27,14 +36,14 @@
       "served_by_colo": "AMS",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 0.323
+        "sql_duration_ms": 0.2123
       },
-      "duration": 0.323,
+      "duration": 0.2123,
       "changes": 0,
       "last_row_id": 0,
       "changed_db": false,
-      "size_after": 126976,
-      "rows_read": 2,
+      "size_after": 131072,
+      "rows_read": 3,
       "rows_written": 0,
       "total_attempts": 1
     }

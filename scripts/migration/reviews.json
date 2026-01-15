@@ -10,6 +10,26 @@
         "content": "I had the \"Biang Biang\" noodles with brisket, very tasty though a bit of regret the next day due to the heavy chilli oil.\nVery authentic & tasty place.",
         "created_at": 1768146907,
         "updated_at": null
+      },
+      {
+        "id": "6a798ebc-3fce-4bb9-b2dd-cb551ee77473",
+        "venue_id": "c10ceb40-963d-48d4-92cf-717e0eaae800",
+        "user_id": "15a89413-8b75-4cce-b9e2-9050b8ad2205",
+        "rating": 5,
+        "title": "No regrets ",
+        "content": "It’s delicious and worth coming :)",
+        "created_at": 1768420133,
+        "updated_at": null
+      },
+      {
+        "id": "8f03e459-8b4c-4964-bdd6-f6123cd8ee4b",
+        "venue_id": "f299e9a1-bfa3-47fb-b640-0dd108786ba9",
+        "user_id": "2f2859e6-2779-46ae-9018-5581ce7065b7",
+        "rating": 5,
+        "title": "Overwhelming, but very tasty, portion",
+        "content": "We all had the \"Golden Supreme Beef Rib Noodles\", coming with a giant rib of beef (very tender and juicy and with a great marinade) and very tasty broth.",
+        "created_at": 1768483939,
+        "updated_at": null
       }
     ],
     "success": true,
@@ -19,14 +39,14 @@
       "served_by_colo": "AMS",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 0.3799
+        "sql_duration_ms": 0.3372
       },
-      "duration": 0.3799,
+      "duration": 0.3372,
       "changes": 0,
       "last_row_id": 0,
       "changed_db": false,
-      "size_after": 126976,
-      "rows_read": 1,
+      "size_after": 131072,
+      "rows_read": 3,
       "rows_written": 0,
       "total_attempts": 1
     }

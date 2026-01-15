@@ -127,9 +127,17 @@ function VenueCardSkeleton() {
   );
 }
 
-function MapMarker({ venue, getImageUrl }: { venue: any; getImageUrl: any }) {
-  const [showPopup, setShowPopup] = useState(false);
-
+function MapMarker({
+  venue,
+  getImageUrl,
+  isSelected,
+  onSelect
+}: {
+  venue: any;
+  getImageUrl: any;
+  isSelected: boolean;
+  onSelect: (venueId: string | null) => void;
+}) {
   return (
     <>
       <Marker
@@ -138,7 +146,7 @@ function MapMarker({ venue, getImageUrl }: { venue: any; getImageUrl: any }) {
         anchor="bottom"
         onClick={(e) => {
           e.originalEvent.stopPropagation();
-          setShowPopup(true);
+          onSelect(venue._id);
         }}
       >
         <div className="cursor-pointer transform hover:scale-110 transition-transform">
@@ -151,12 +159,12 @@ function MapMarker({ venue, getImageUrl }: { venue: any; getImageUrl: any }) {
           </svg>
         </div>
       </Marker>
-      {showPopup && (
+      {isSelected && (
         <Popup
           latitude={venue.latitude!}
           longitude={venue.longitude!}
           anchor="bottom"
-          onClose={() => setShowPopup(false)}
+          onClose={() => onSelect(null)}
           closeOnClick={false}
           offset={[0, -40] as [number, number]}
         >
@@ -201,6 +209,7 @@ export function HomePage() {
   const { user, isAuthenticated } = useAuth();
   const [selectedType, setSelectedType] = useState<VenueType | null>(null);
   const [showFavorites, setShowFavorites] = useState(false);
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
 
   // Fetch venues with Convex - real-time updates!
   const venues = useQuery(api.venues.list, {
@@ -410,6 +419,7 @@ export function HomePage() {
               style={{ width: "100%", height: "100%" }}
               mapStyle="mapbox://styles/mapbox/streets-v12"
               mapboxAccessToken={MAPBOX_TOKEN}
+              onClick={() => setSelectedVenueId(null)}
             >
               <NavigationControl position="top-right" />
               {venuesWithLocation.map((venue) => (
@@ -417,6 +427,8 @@ export function HomePage() {
                   key={venue._id}
                   venue={venue}
                   getImageUrl={getImageUrl}
+                  isSelected={selectedVenueId === venue._id}
+                  onSelect={setSelectedVenueId}
                 />
               ))}
             </Map>

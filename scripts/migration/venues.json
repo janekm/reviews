@@ -1320,6 +1320,21 @@
         "updated_by_id": null,
         "website": null,
         "main_photo_id": null
+      },
+      {
+        "id": "f299e9a1-bfa3-47fb-b640-0dd108786ba9",
+        "name": "YeYe's Noodle and Dumplings",
+        "type": "restaurant",
+        "address": "Wentworth Street",
+        "description": "Very good noodle soups and soup dumplings",
+        "latitude": 51.516811595016705,
+        "longitude": -0.07382780313491821,
+        "created_at": 1768483077,
+        "creator_id": "2f2859e6-2779-46ae-9018-5581ce7065b7",
+        "updated_at": 1768483518,
+        "updated_by_id": "2f2859e6-2779-46ae-9018-5581ce7065b7",
+        "website": null,
+        "main_photo_id": "d8043d9b-278c-4b36-94a4-27720d95743f"
       }
     ],
     "success": true,
@@ -1329,14 +1344,14 @@
       "served_by_colo": "AMS",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 2.1396
+        "sql_duration_ms": 1.4838
       },
-      "duration": 2.1396,
+      "duration": 1.4838,
       "changes": 0,
       "last_row_id": 0,
       "changed_db": false,
-      "size_after": 126976,
-      "rows_read": 88,
+      "size_after": 131072,
+      "rows_read": 89,
       "rows_written": 0,
       "total_attempts": 1
     }

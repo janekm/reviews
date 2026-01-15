@@ -1144,6 +1144,45 @@
         "size_bytes": null,
         "created_at": 1768385808,
         "review_id": null
+      },
+      {
+        "id": "881c048e-3d77-47f5-9c4e-bfcd85c14432",
+        "venue_id": "c10ceb40-963d-48d4-92cf-717e0eaae800",
+        "user_id": "15a89413-8b75-4cce-b9e2-9050b8ad2205",
+        "storage_key": "photos/c10ceb40-963d-48d4-92cf-717e0eaae800/881c048e-3d77-47f5-9c4e-bfcd85c14432.jpeg",
+        "original_filename": "IMG_7687.jpeg",
+        "caption": null,
+        "width": null,
+        "height": null,
+        "size_bytes": 2986167,
+        "created_at": 1768420087,
+        "review_id": null
+      },
+      {
+        "id": "d8043d9b-278c-4b36-94a4-27720d95743f",
+        "venue_id": "f299e9a1-bfa3-47fb-b640-0dd108786ba9",
+        "user_id": "2f2859e6-2779-46ae-9018-5581ce7065b7",
+        "storage_key": "photos/f299e9a1-bfa3-47fb-b640-0dd108786ba9/d8043d9b-278c-4b36-94a4-27720d95743f.jpg",
+        "original_filename": "2025-10-14.jpg",
+        "caption": null,
+        "width": null,
+        "height": null,
+        "size_bytes": 339543,
+        "created_at": 1768483111,
+        "review_id": null
+      },
+      {
+        "id": "510615f0-097f-4617-b0a5-41422ff6e1b9",
+        "venue_id": "f299e9a1-bfa3-47fb-b640-0dd108786ba9",
+        "user_id": "2f2859e6-2779-46ae-9018-5581ce7065b7",
+        "storage_key": "photos/f299e9a1-bfa3-47fb-b640-0dd108786ba9/reviews/510615f0-097f-4617-b0a5-41422ff6e1b9.jpg",
+        "original_filename": "IMG_6046.jpg",
+        "caption": null,
+        "width": null,
+        "height": null,
+        "size_bytes": 3537707,
+        "created_at": 1768483983,
+        "review_id": "8f03e459-8b4c-4964-bdd6-f6123cd8ee4b"
       }
     ],
     "success": true,
@@ -1153,14 +1192,14 @@
       "served_by_colo": "AMS",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 0.7935
+        "sql_duration_ms": 0.7999
       },
-      "duration": 0.7935,
+      "duration": 0.7999,
       "changes": 0,
       "last_row_id": 0,
       "changed_db": false,
-      "size_after": 126976,
-      "rows_read": 88,
+      "size_after": 131072,
+      "rows_read": 91,
       "rows_written": 0,
       "total_attempts": 1
     }

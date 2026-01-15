@@ -6,6 +6,24 @@
         "user_id": "2f2859e6-2779-46ae-9018-5581ce7065b7",
         "venue_id": "c10ceb40-963d-48d4-92cf-717e0eaae800",
         "created_at": 1768150017
+      },
+      {
+        "id": "b782271a-1e33-4df6-ad26-b8dcc11f67f5",
+        "user_id": "aa7230b5-cf67-43c9-a5ee-1e576318c407",
+        "venue_id": "v079",
+        "created_at": 1768471146
+      },
+      {
+        "id": "91628957-3df5-41c2-8a11-9e666d588572",
+        "user_id": "aa7230b5-cf67-43c9-a5ee-1e576318c407",
+        "venue_id": "v062",
+        "created_at": 1768471224
+      },
+      {
+        "id": "a3fe0205-22e1-4b2f-8bad-24f20370c87f",
+        "user_id": "aa7230b5-cf67-43c9-a5ee-1e576318c407",
+        "venue_id": "v072",
+        "created_at": 1768471253
       }
     ],
     "success": true,
@@ -15,14 +33,14 @@
       "served_by_colo": "AMS",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 0.9021
+        "sql_duration_ms": 0.3368
       },
-      "duration": 0.9021,
+      "duration": 0.3368,
       "changes": 0,
       "last_row_id": 0,
       "changed_db": false,
-      "size_after": 126976,
-      "rows_read": 1,
+      "size_after": 131072,
+      "rows_read": 4,
       "rows_written": 0,
       "total_attempts": 1
     }
