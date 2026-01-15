@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import { Icon } from "leaflet";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Button } from "../components/ui/button";
 import { getImageUrl, ImageKitTransforms } from "../lib/imagekit";
@@ -148,6 +148,8 @@ export function HomePage() {
 
   // Get favorite count for display
   const favoriteIds = useQuery(api.favorites.getMyFavoriteIds);
+  const favoriteIdsSet = new Set(favoriteIds ?? []);
+  const toggleFavorite = useMutation(api.favorites.toggle);
 
   const loading = venues === undefined;
   const loadingActivity = activity === undefined;
@@ -265,51 +267,72 @@ export function HomePage() {
             </div>
           ) : (
             <div className="space-y-2">
-              {filteredVenues.map((venue, index) => (
-                <Link
-                  key={venue._id}
-                  to={`/venue/${venue._id}`}
-                  className="group block bg-card border border-border rounded-lg overflow-hidden card-hover animate-fade-in-up"
-                  style={{ animationDelay: `${index * 0.02}s` }}
-                >
-                  <div className="flex">
-                    {/* Thumbnail */}
-                    {venue.mainPhotoStorageKey && (
-                      <div className="w-24 shrink-0 bg-muted">
-                        <img
-                          src={getImageUrl(venue.mainPhotoStorageKey, ImageKitTransforms.venueListCard)}
-                          alt=""
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                      </div>
+              {filteredVenues.map((venue, index) => {
+                const isFavorited = favoriteIdsSet.has(venue._id);
+                return (
+                  <Link
+                    key={venue._id}
+                    to={`/venue/${venue._id}`}
+                    className="group relative block bg-card border border-border rounded-lg overflow-hidden card-hover animate-fade-in-up"
+                    style={{ animationDelay: `${index * 0.02}s` }}
+                  >
+                    {/* Favorite Button */}
+                    {isAuthenticated && (
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleFavorite({ venueId: venue._id });
+                        }}
+                        className={`absolute bottom-2 right-2 z-10 p-1 rounded-full transition-all duration-200 ${
+                          isFavorited
+                            ? "text-rose-500 opacity-100"
+                            : "text-muted-foreground opacity-0 group-hover:opacity-60 hover:text-rose-500 hover:opacity-100"
+                        }`}
+                        title={isFavorited ? "Remove from saved" : "Save venue"}
+                      >
+                        <HeartIcon className="w-3.5 h-3.5" filled={isFavorited} />
+                      </button>
                     )}
-                    <div className="flex-1 p-3.5 min-w-0">
-                      <div className="flex items-start justify-between gap-2 mb-1.5">
-                        <h3 className="font-medium text-foreground group-hover:text-accent transition-colors truncate">
-                          {venue.name}
-                        </h3>
-                        <span className="text-[11px] text-muted-foreground shrink-0 uppercase tracking-wide">
-                          {TYPE_CONFIG[venue.type]?.label || venue.type}
-                        </span>
-                      </div>
-                      {venue.address && (
-                        <p className="text-xs text-muted-foreground truncate mb-2">
-                          {venue.address}
-                        </p>
+                    <div className="flex">
+                      {/* Thumbnail */}
+                      {venue.mainPhotoStorageKey && (
+                        <div className="w-24 shrink-0 bg-muted">
+                          <img
+                            src={getImageUrl(venue.mainPhotoStorageKey, ImageKitTransforms.venueListCard)}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        </div>
                       )}
-                      {venue.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
-                          {venue.description}
-                        </p>
-                      )}
-                      <div className="mt-2 flex items-center gap-3">
-                        <VenueRating rating={venue.avgRating} count={venue.reviewCount} />
+                      <div className="flex-1 p-3.5 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <h3 className="font-medium text-foreground group-hover:text-accent transition-colors truncate">
+                            {venue.name}
+                          </h3>
+                          <span className="text-[11px] text-muted-foreground shrink-0 uppercase tracking-wide">
+                            {TYPE_CONFIG[venue.type]?.label || venue.type}
+                          </span>
+                        </div>
+                        {venue.address && (
+                          <p className="text-xs text-muted-foreground truncate mb-2">
+                            {venue.address}
+                          </p>
+                        )}
+                        {venue.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+                            {venue.description}
+                          </p>
+                        )}
+                        <div className="mt-2 flex items-center gap-3">
+                          <VenueRating rating={venue.avgRating} count={venue.reviewCount} />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Link>
-              ))}
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>

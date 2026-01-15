@@ -53,6 +53,33 @@ async function getCurrentUser(ctx: any) {
     .unique();
 }
 
+// Helper to recalculate and update venue photo stats
+async function updateVenuePhotoStats(ctx: any, venueId: Id<"venues">) {
+  const photos = await ctx.db
+    .query("photos")
+    .withIndex("by_venue", (q: any) => q.eq("venueId", venueId))
+    .collect();
+
+  const photoCount = photos.length;
+
+  // Get the venue to check current main photo
+  const venue = await ctx.db.get(venueId);
+  if (!venue) return;
+
+  // Get the main photo storage key if main photo exists
+  let mainPhotoStorageKey: string | undefined;
+  if (venue.mainPhotoId) {
+    const mainPhoto = await ctx.db.get(venue.mainPhotoId);
+    mainPhotoStorageKey = mainPhoto?.storageKey;
+  }
+
+  await ctx.db.patch(venueId, {
+    photoCount,
+    mainPhotoStorageKey,
+    updatedAt: Date.now(),
+  });
+}
+
 /**
  * List photos for a venue
  */
@@ -291,9 +318,13 @@ export const savePhotoRecord = internalMutation({
     if (!venue.mainPhotoId && !args.reviewId) {
       await ctx.db.patch(args.venueId, {
         mainPhotoId: id,
+        mainPhotoStorageKey: args.storageKey,
         updatedAt: now,
       });
     }
+
+    // Update venue photo stats
+    await updateVenuePhotoStats(ctx, args.venueId);
 
     return id;
   },
@@ -306,13 +337,18 @@ export const generateUploadUrl = mutation({
   args: {},
   returns: v.string(),
   handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated - no identity found");
+    }
+
     const currentUser = await getCurrentUser(ctx);
     if (!currentUser) {
-      throw new Error("Not authenticated");
+      throw new Error(`User not found in database for identity: ${identity.subject}`);
     }
 
     if (!hasMinRole(currentUser.role, "user")) {
-      throw new Error("You need to be upgraded to 'user' role to upload photos");
+      throw new Error(`Insufficient role: ${currentUser.role}. You need 'user' role or higher to upload photos.`);
     }
 
     return await ctx.storage.generateUploadUrl();
@@ -387,9 +423,13 @@ export const savePhoto = mutation({
     if (!venue.mainPhotoId && !args.reviewId) {
       await ctx.db.patch(args.venueId, {
         mainPhotoId: id,
+        mainPhotoStorageKey: storageKey,
         updatedAt: now,
       });
     }
+
+    // Update venue photo stats
+    await updateVenuePhotoStats(ctx, args.venueId);
 
     return id;
   },
@@ -507,17 +547,24 @@ export const remove = mutation({
       const otherPhotos = await ctx.db
         .query("photos")
         .withIndex("by_venue", (q) => q.eq("venueId", photo.venueId))
-        .collect();
+        .first();
 
-      const newMainPhoto = otherPhotos.find(p => p._id !== args.id);
+      const newMainPhoto = otherPhotos && otherPhotos._id !== args.id ? otherPhotos : null;
       await ctx.db.patch(photo.venueId, {
         mainPhotoId: newMainPhoto?._id,
+        mainPhotoStorageKey: newMainPhoto?.storageKey,
         updatedAt: Date.now(),
       });
     }
 
+    const venueId = photo.venueId;
+
     // Delete the photo record
     await ctx.db.delete(args.id);
+
+    // Update venue photo stats
+    await updateVenuePhotoStats(ctx, venueId);
+
     return null;
   },
 });

@@ -7,7 +7,7 @@ A local venue discovery and review platform for Old Spitalfields Market in Londo
 - **Frontend**: React 18, React Router v6, React Leaflet (maps)
 - **Backend**: Convex (real-time database and serverless functions)
 - **Database**: Convex (replaces D1/Drizzle)
-- **File Storage**: Convex Storage + ImageKit CDN
+- **File Storage**: Cloudflare R2 + ImageKit CDN (DO NOT change to Convex storage - ImageKit is configured to serve from R2)
 - **Authentication**: WorkOS AuthKit via @convex-dev/workos
 - **Styling**: Tailwind CSS v3.4
 - **Build**: Vite
@@ -43,6 +43,23 @@ VITE_IMAGEKIT_URL=https://ik.imagekit.io/your-imagekit-id
 Set these in Convex Dashboard > Settings > Environment Variables:
 - `WORKOS_API_KEY=sk_...`
 - `WORKOS_CLIENT_ID=client_...`
+- `R2_ACCOUNT_ID` - Cloudflare account ID for R2 storage
+- `R2_ACCESS_KEY_ID` - R2 API access key ID
+- `R2_SECRET_ACCESS_KEY` - R2 API secret access key
+- `R2_BUCKET_NAME` - R2 bucket name (default: reviews-photos)
+
+## Deployment
+
+The app is deployed to:
+- **Frontend**: Cloudflare Workers (via `npx wrangler deploy`)
+- **Backend**: Convex (via `npx convex deploy`)
+
+To deploy to production:
+```bash
+bun run build --mode production   # Build with .env.production
+npx convex deploy --yes           # Deploy Convex functions
+npx wrangler deploy               # Deploy frontend to CF Workers
+```
 
 ## Project Structure
 

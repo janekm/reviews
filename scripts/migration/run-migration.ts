@@ -13,7 +13,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const CONVEX_URL = process.env.VITE_CONVEX_URL || "https://tremendous-rook-473.convex.cloud";
+const CONVEX_URL = process.env.VITE_CONVEX_URL || "https://brazen-wolverine-860.convex.cloud";
 
 async function loadJson(filename: string) {
   const filepath = path.join(__dirname, filename);
@@ -45,7 +45,7 @@ async function main() {
 
   // Step 1: Import users
   console.log("👤 Importing users...");
-  const userIdMap = await client.mutation(api.migrations.importUsers as any, { users });
+  const userIdMap = await client.mutation(api.migrations.importUsers, { users });
   console.log(`  ✓ Mapped ${Object.keys(userIdMap).length} users\n`);
 
   // Get a default user ID for venues without creator
@@ -56,7 +56,7 @@ async function main() {
 
   // Step 2: Import venues
   console.log("🏪 Importing venues...");
-  const venueIdMap = await client.mutation(api.migrations.importVenues as any, {
+  const venueIdMap = await client.mutation(api.migrations.importVenues, {
     venues,
     userIdMap,
     defaultUserId,
@@ -65,7 +65,7 @@ async function main() {
 
   // Step 3: Import reviews
   console.log("⭐ Importing reviews...");
-  const reviewIdMap = await client.mutation(api.migrations.importReviews as any, {
+  const reviewIdMap = await client.mutation(api.migrations.importReviews, {
     reviews,
     userIdMap,
     venueIdMap,
@@ -74,7 +74,7 @@ async function main() {
 
   // Step 4: Import photos
   console.log("📷 Importing photos...");
-  const photoIdMap = await client.mutation(api.migrations.importPhotos as any, {
+  const photoIdMap = await client.mutation(api.migrations.importPhotos, {
     photos,
     userIdMap,
     venueIdMap,
@@ -84,27 +84,32 @@ async function main() {
 
   // Step 5: Import favorites
   console.log("❤️ Importing favorites...");
-  await client.mutation(api.migrations.importFavorites as any, {
+  await client.mutation(api.migrations.importFavorites, {
     favorites,
     userIdMap,
     venueIdMap,
   });
   console.log(`  ✓ Done\n`);
 
-  // Step 6: Update venue main photos
-  console.log("🖼️ Setting venue main photos...");
+  // Step 6: Update venue main photos (for venues that had main_photo_id in D1)
+  console.log("🖼️ Setting venue main photos from D1 data...");
   const venuePhotoMap: Record<string, string> = {};
   for (const venue of venues) {
     if (venue.main_photo_id) {
       venuePhotoMap[venue.id] = venue.main_photo_id;
     }
   }
-  await client.mutation(api.migrations.updateVenueMainPhotos as any, {
+  await client.mutation(api.migrations.updateVenueMainPhotos, {
     venuePhotoMap,
     venueIdMap,
     photoIdMap,
   });
-  console.log(`  ✓ Done\n`);
+  console.log(`  ✓ Set ${Object.keys(venuePhotoMap).length} main photos from D1\n`);
+
+  // Step 7: Set default main photos for venues without one
+  console.log("🖼️ Setting default main photos for remaining venues...");
+  const defaultPhotoResult = await client.mutation(api.migrations.setDefaultMainPhotos, {});
+  console.log(`  ✓ Updated ${defaultPhotoResult.updated} venues with their first photo\n`);
 
   console.log("✅ Migration complete!");
   console.log(`
@@ -113,6 +118,8 @@ Summary:
   - Venues: ${Object.keys(venueIdMap).length}
   - Reviews: ${Object.keys(reviewIdMap).length}
   - Photos: ${Object.keys(photoIdMap).length}
+  - Main photos from D1: ${Object.keys(venuePhotoMap).length}
+  - Default main photos set: ${defaultPhotoResult.updated}
 `);
 }
 

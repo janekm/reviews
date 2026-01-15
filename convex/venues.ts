@@ -27,13 +27,14 @@ const venueListItemValidator = v.object({
   latitude: v.optional(v.number()),
   longitude: v.optional(v.number()),
   mainPhotoId: v.optional(v.id("photos")),
+  // Denormalized stats (stored on venue)
+  avgRating: v.optional(v.number()),
+  reviewCount: v.optional(v.number()),
+  photoCount: v.optional(v.number()),
   createdBy: v.id("users"),
   createdAt: v.number(),
   updatedAt: v.number(),
-  // Computed fields
-  avgRating: v.union(v.number(), v.null()),
-  reviewCount: v.number(),
-  photoCount: v.number(),
+  // Computed at query time
   mainPhotoStorageKey: v.optional(v.string()),
   isFavorite: v.boolean(),
 });
@@ -103,49 +104,31 @@ export const list = query({
       venues = venues.filter((v) => userFavoriteIds.has(v._id));
     }
 
-    // Compute fields for each venue
-    const result: Array<typeof venueListItemValidator.type> = [];
+    // Build result using stored stats (no extra queries needed!)
+    const result: Array<typeof venueListItemValidator.type> = venues.map((venue) => ({
+      ...venue,
+      isFavorite: userFavoriteIds.has(venue._id),
+    }));
 
-    for (const venue of venues) {
-      // Get reviews for this venue
-      const reviews = await ctx.db
-        .query("reviews")
-        .withIndex("by_venue", (q) => q.eq("venueId", venue._id))
-        .collect();
+    // Sort: venues with reviews first, then by average rating (descending), then by review count
+    result.sort((a, b) => {
+      // First: venues with reviews come before those without
+      const aHasReviews = (a.reviewCount ?? 0) > 0;
+      const bHasReviews = (b.reviewCount ?? 0) > 0;
+      if (aHasReviews && !bHasReviews) return -1;
+      if (!aHasReviews && bHasReviews) return 1;
 
-      const reviewCount = reviews.length;
-      const avgRating = reviewCount > 0
-        ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount
-        : null;
-
-      // Get photo count
-      const photos = await ctx.db
-        .query("photos")
-        .withIndex("by_venue", (q) => q.eq("venueId", venue._id))
-        .collect();
-      const photoCount = photos.length;
-
-      // Get main photo storage key
-      let mainPhotoStorageKey: string | undefined;
-      if (venue.mainPhotoId) {
-        const mainPhoto = await ctx.db.get(venue.mainPhotoId);
-        if (mainPhoto) {
-          mainPhotoStorageKey = mainPhoto.storageKey;
-        }
+      // Second: sort by average rating (descending)
+      if (aHasReviews && bHasReviews) {
+        const ratingDiff = (b.avgRating ?? 0) - (a.avgRating ?? 0);
+        if (ratingDiff !== 0) return ratingDiff;
+        // Third: for same rating, more reviews comes first
+        return (b.reviewCount ?? 0) - (a.reviewCount ?? 0);
       }
 
-      result.push({
-        ...venue,
-        avgRating,
-        reviewCount,
-        photoCount,
-        mainPhotoStorageKey,
-        isFavorite: userFavoriteIds.has(venue._id),
-      });
-    }
-
-    // Sort by creation time descending (newest first)
-    result.sort((a, b) => b._creationTime - a._creationTime);
+      // For venues without reviews, sort by creation time (newest first)
+      return b._creationTime - a._creationTime;
+    });
 
     return result;
   },
@@ -393,6 +376,7 @@ export const setMainPhoto = mutation({
 
     await ctx.db.patch(args.venueId, {
       mainPhotoId: args.photoId,
+      mainPhotoStorageKey: photo.storageKey,
       updatedAt: Date.now(),
     });
 

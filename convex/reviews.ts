@@ -37,6 +37,25 @@ async function getCurrentUser(ctx: any) {
     .unique();
 }
 
+// Helper to recalculate and update venue review stats
+async function updateVenueReviewStats(ctx: any, venueId: Id<"venues">) {
+  const reviews = await ctx.db
+    .query("reviews")
+    .withIndex("by_venue", (q: any) => q.eq("venueId", venueId))
+    .collect();
+
+  const reviewCount = reviews.length;
+  const avgRating = reviewCount > 0
+    ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviewCount
+    : undefined;
+
+  await ctx.db.patch(venueId, {
+    reviewCount,
+    avgRating,
+    updatedAt: Date.now(),
+  });
+}
+
 /**
  * List reviews for a venue
  */
@@ -268,6 +287,9 @@ export const create = mutation({
       createdAt: now,
     });
 
+    // Update venue stats
+    await updateVenueReviewStats(ctx, args.venueId);
+
     return reviewId;
   },
 });
@@ -321,6 +343,11 @@ export const update = mutation({
       createdAt: now,
     });
 
+    // Update venue stats if rating changed
+    if (args.rating !== undefined) {
+      await updateVenueReviewStats(ctx, review.venueId);
+    }
+
     return null;
   },
 });
@@ -348,7 +375,12 @@ export const remove = mutation({
       throw new Error("Not authorized to delete this review");
     }
 
+    const venueId = review.venueId;
     await ctx.db.delete(args.id);
+
+    // Update venue stats
+    await updateVenueReviewStats(ctx, venueId);
+
     return null;
   },
 });

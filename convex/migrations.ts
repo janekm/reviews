@@ -24,30 +24,49 @@ export const importUsers = internalMutation({
     const idMap: IdMap = {};
 
     for (const user of args.users) {
-      // Check if user already exists by workos_id
-      const existing = await ctx.db
+      // Check if user already exists by email (for production migration)
+      const existingByEmail = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", user.email))
+        .unique();
+
+      if (existingByEmail) {
+        // Update role from D1 data
+        await ctx.db.patch(existingByEmail._id, {
+          role: user.role as "viewer" | "user" | "editor" | "admin",
+          name: user.name ?? existingByEmail.name,
+          avatarUrl: user.avatar_url ?? existingByEmail.avatarUrl,
+        });
+        idMap[user.id] = existingByEmail._id;
+        console.log(`User ${user.email} already exists, updated role to ${user.role}`);
+        continue;
+      }
+
+      // Check by workos_id as fallback
+      const existingByWorkos = await ctx.db
         .query("users")
         .withIndex("by_workos_id", (q) => q.eq("workosUserId", user.workos_id))
         .unique();
 
-      if (existing) {
-        idMap[user.id] = existing._id;
-        console.log(`User ${user.email} already exists, skipping`);
+      if (existingByWorkos) {
+        idMap[user.id] = existingByWorkos._id;
+        console.log(`User ${user.email} already exists by workos_id, skipping`);
         continue;
       }
 
+      // Create new user with placeholder workos_id (they'll get a real one when they sign in)
       const id = await ctx.db.insert("users", {
-        workosUserId: user.workos_id,
+        workosUserId: `d1_migration_${user.workos_id}`,
         email: user.email,
         name: user.name ?? undefined,
         avatarUrl: user.avatar_url ?? undefined,
         role: user.role as "viewer" | "user" | "editor" | "admin",
-        createdAt: user.created_at * 1000, // Convert to ms if needed
+        createdAt: user.created_at * 1000,
         updatedAt: Date.now(),
       });
 
       idMap[user.id] = id;
-      console.log(`Imported user: ${user.email}`);
+      console.log(`Imported new user: ${user.email}`);
     }
 
     return idMap;
@@ -392,24 +411,106 @@ export const setDefaultMainPhotos = internalMutation({
   args: {},
   handler: async (ctx) => {
     const venues = await ctx.db.query("venues").collect();
+    const allPhotos = await ctx.db.query("photos").collect();
     let updated = 0;
+
+    // Group photos by venue
+    const photosByVenue = new Map<string, typeof allPhotos>();
+    for (const photo of allPhotos) {
+      const venueId = photo.venueId as string;
+      if (!photosByVenue.has(venueId)) {
+        photosByVenue.set(venueId, []);
+      }
+      photosByVenue.get(venueId)!.push(photo);
+    }
 
     for (const venue of venues) {
       if (!venue.mainPhotoId) {
-        // Get first photo for this venue
-        const photo = await ctx.db
-          .query("photos")
-          .withIndex("by_venue", (q) => q.eq("venueId", venue._id))
-          .first();
-
-        if (photo) {
-          await ctx.db.patch(venue._id, { mainPhotoId: photo._id });
+        const venuePhotos = photosByVenue.get(venue._id as string);
+        if (venuePhotos && venuePhotos.length > 0) {
+          await ctx.db.patch(venue._id, { mainPhotoId: venuePhotos[0]._id });
           updated++;
         }
       }
     }
 
-    console.log(`Set main photo for ${updated} venues`);
-    return updated;
+    return {
+      totalVenues: venues.length,
+      totalPhotos: allPhotos.length,
+      venuesWithPhotos: photosByVenue.size,
+      updated
+    };
+  },
+});
+
+/**
+ * Migration: Backfill all venue stats (avgRating, reviewCount, photoCount, mainPhotoStorageKey)
+ */
+export const backfillVenueStats = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const venues = await ctx.db.query("venues").collect();
+    const allReviews = await ctx.db.query("reviews").collect();
+    const allPhotos = await ctx.db.query("photos").collect();
+
+    // Group reviews by venue
+    const reviewsByVenue = new Map<string, typeof allReviews>();
+    for (const review of allReviews) {
+      const venueId = review.venueId as string;
+      if (!reviewsByVenue.has(venueId)) {
+        reviewsByVenue.set(venueId, []);
+      }
+      reviewsByVenue.get(venueId)!.push(review);
+    }
+
+    // Group photos by venue
+    const photosByVenue = new Map<string, typeof allPhotos>();
+    for (const photo of allPhotos) {
+      const venueId = photo.venueId as string;
+      if (!photosByVenue.has(venueId)) {
+        photosByVenue.set(venueId, []);
+      }
+      photosByVenue.get(venueId)!.push(photo);
+    }
+
+    // Create photo lookup by ID
+    const photosById = new Map<string, typeof allPhotos[0]>();
+    for (const photo of allPhotos) {
+      photosById.set(photo._id as string, photo);
+    }
+
+    let updated = 0;
+    for (const venue of venues) {
+      const venueReviews = reviewsByVenue.get(venue._id as string) ?? [];
+      const venuePhotos = photosByVenue.get(venue._id as string) ?? [];
+
+      const reviewCount = venueReviews.length;
+      const avgRating = reviewCount > 0
+        ? venueReviews.reduce((sum, r) => sum + r.rating, 0) / reviewCount
+        : undefined;
+      const photoCount = venuePhotos.length;
+
+      // Get main photo storage key
+      let mainPhotoStorageKey: string | undefined;
+      if (venue.mainPhotoId) {
+        const mainPhoto = photosById.get(venue.mainPhotoId as string);
+        mainPhotoStorageKey = mainPhoto?.storageKey;
+      }
+
+      await ctx.db.patch(venue._id, {
+        avgRating,
+        reviewCount,
+        photoCount,
+        mainPhotoStorageKey,
+      });
+      updated++;
+    }
+
+    return {
+      totalVenues: venues.length,
+      updated,
+      totalReviews: allReviews.length,
+      totalPhotos: allPhotos.length,
+    };
   },
 });

@@ -37,6 +37,11 @@ export default defineSchema({
     latitude: v.optional(v.number()),
     longitude: v.optional(v.number()),
     mainPhotoId: v.optional(v.id("photos")),
+    mainPhotoStorageKey: v.optional(v.string()), // Denormalized for fast list queries
+    // Denormalized stats (updated when reviews/photos change)
+    avgRating: v.optional(v.number()),
+    reviewCount: v.optional(v.number()),
+    photoCount: v.optional(v.number()),
     createdBy: v.id("users"),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -94,5 +99,6 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_user", ["userId"])
+    .index("by_venue", ["venueId"])
     .index("by_created_at", ["createdAt"]),
 });
