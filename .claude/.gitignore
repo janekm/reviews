@@ -1,0 +1,5 @@
+# Personal settings (not shared with team)
+settings.local.json
+
+# Testing artifacts (optional - remove if you want to keep documentation)
+# testing/

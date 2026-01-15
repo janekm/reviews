@@ -151,3 +151,12 @@ const createReview = useMutation(api.reviews.create);
 4. Gradient mesh backgrounds for depth
 5. Color-coded venue type badges
 6. Interactive star ratings with hover effects
+
+## Claude Code Skills
+
+The following skills are available in `.claude/skills/`:
+
+- **convex-development**: Convex function patterns, validators, queries with indexes, auth checks. Auto-activates when working with `convex/*.ts` files.
+- **react-patterns**: React component patterns, loading/empty states, design system classes. Auto-activates when creating components.
+
+See `.claude/README.md` for full documentation.
