@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import { Icon } from "leaflet";
+import Map, { Marker, Popup, NavigationControl } from "react-map-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Button } from "../components/ui/button";
@@ -11,18 +11,13 @@ import type { Id } from "../../../convex/_generated/dataModel";
 
 type VenueType = "restaurant" | "cafe" | "shop" | "bar";
 
-const SPITALFIELDS_CENTER: [number, number] = [51.5197, -0.0754];
+const MAPBOX_TOKEN = "pk.eyJ1IjoiamFuZWttIiwiYSI6ImNta2ZuaGNlbTAweTkzZXF0a2hubWIxM2cifQ.ijlp5QVZz5idX4UBKgdVvA";
 
-const venueIcon = new Icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl:
-    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
+const SPITALFIELDS_CENTER = {
+  latitude: 51.5197,
+  longitude: -0.0754,
+  zoom: 16,
+};
 
 const TYPE_CONFIG: Record<
   string,
@@ -129,6 +124,76 @@ function VenueCardSkeleton() {
       <div className="h-4 w-full skeleton rounded" />
       <div className="h-4 w-3/4 skeleton rounded" />
     </div>
+  );
+}
+
+function MapMarker({ venue, getImageUrl }: { venue: any; getImageUrl: any }) {
+  const [showPopup, setShowPopup] = useState(false);
+
+  return (
+    <>
+      <Marker
+        latitude={venue.latitude!}
+        longitude={venue.longitude!}
+        anchor="bottom"
+        onClick={(e) => {
+          e.originalEvent.stopPropagation();
+          setShowPopup(true);
+        }}
+      >
+        <div className="cursor-pointer transform hover:scale-110 transition-transform">
+          <svg width="32" height="40" viewBox="0 0 32 40" fill="none">
+            <path
+              d="M16 0C7.164 0 0 7.164 0 16c0 12 16 24 16 24s16-12 16-24c0-8.836-7.164-16-16-16z"
+              fill="#E85D4C"
+            />
+            <circle cx="16" cy="16" r="8" fill="white" />
+          </svg>
+        </div>
+      </Marker>
+      {showPopup && (
+        <Popup
+          latitude={venue.latitude!}
+          longitude={venue.longitude!}
+          anchor="bottom"
+          onClose={() => setShowPopup(false)}
+          closeOnClick={false}
+          offset={[0, -40] as [number, number]}
+        >
+          <div className="min-w-52 -m-2.5">
+            {venue.mainPhotoStorageKey && (
+              <div className="w-full h-28 mb-3 rounded-t overflow-hidden">
+                <img
+                  src={getImageUrl(venue.mainPhotoStorageKey, ImageKitTransforms.mapPopup)}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+            <div className="px-2.5 pb-2.5">
+              <p className="font-display font-semibold text-base mb-1">
+                {venue.name}
+              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <VenueBadge type={venue.type} />
+                <VenueRating rating={venue.avgRating} count={venue.reviewCount} />
+              </div>
+              {venue.address && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  {venue.address}
+                </p>
+              )}
+              <Link
+                to={`/venue/${venue._id}`}
+                className="inline-block mt-3 text-sm font-medium text-primary hover:underline"
+              >
+                View details →
+              </Link>
+            </div>
+          </div>
+        </Popup>
+      )}
+    </>
   );
 }
 
@@ -339,56 +404,22 @@ export function HomePage() {
 
         {/* Map */}
         <div className="flex-1 min-h-[400px] lg:min-h-0">
-          <div className="h-full map-container animate-scale-in">
-            <MapContainer
-              center={SPITALFIELDS_CENTER}
-              zoom={16}
-              className="h-full w-full"
+          <div className="h-full map-container animate-scale-in rounded-xl overflow-hidden">
+            <Map
+              initialViewState={SPITALFIELDS_CENTER}
+              style={{ width: "100%", height: "100%" }}
+              mapStyle="mapbox://styles/mapbox/streets-v12"
+              mapboxAccessToken={MAPBOX_TOKEN}
             >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
+              <NavigationControl position="top-right" />
               {venuesWithLocation.map((venue) => (
-                <Marker
+                <MapMarker
                   key={venue._id}
-                  position={[venue.latitude!, venue.longitude!]}
-                  icon={venueIcon}
-                >
-                  <Popup>
-                    <div className="min-w-52">
-                      {venue.mainPhotoStorageKey && (
-                        <div className="w-full h-28 -mx-[1px] -mt-[1px] mb-3 rounded-t overflow-hidden">
-                          <img
-                            src={getImageUrl(venue.mainPhotoStorageKey, ImageKitTransforms.mapPopup)}
-                            alt=""
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      )}
-                      <p className="font-display font-semibold text-base mb-1">
-                        {venue.name}
-                      </p>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <VenueBadge type={venue.type} />
-                        <VenueRating rating={venue.avgRating} count={venue.reviewCount} />
-                      </div>
-                      {venue.address && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {venue.address}
-                        </p>
-                      )}
-                      <Link
-                        to={`/venue/${venue._id}`}
-                        className="inline-block mt-3 text-sm font-medium text-primary hover:underline"
-                      >
-                        View details →
-                      </Link>
-                    </div>
-                  </Popup>
-                </Marker>
+                  venue={venue}
+                  getImageUrl={getImageUrl}
+                />
               ))}
-            </MapContainer>
+            </Map>
           </div>
         </div>
       </div>

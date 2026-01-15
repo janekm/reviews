@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
-import { Icon, type LatLng } from "leaflet";
+import Map, { Marker, NavigationControl, MapLayerMouseEvent } from "react-map-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -13,17 +13,13 @@ import { PhotoUpload } from "../components/PhotoUpload";
 import { getImageUrl } from "../lib/imagekit";
 import { useAuth, hasMinRole } from "../hooks/useAuth";
 
-const SPITALFIELDS_CENTER: [number, number] = [51.5197, -0.0754];
+const MAPBOX_TOKEN = "pk.eyJ1IjoiamFuZWttIiwiYSI6ImNta2ZuaGNlbTAweTkzZXF0a2hubWIxM2cifQ.ijlp5QVZz5idX4UBKgdVvA";
 
-const venueIcon = new Icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
+const SPITALFIELDS_CENTER = {
+  latitude: 51.5197,
+  longitude: -0.0754,
+  zoom: 16,
+};
 
 type VenueType = "restaurant" | "cafe" | "shop" | "bar";
 
@@ -81,9 +77,18 @@ function InteractiveStarRating({ rating, onChange }: { rating: number; onChange:
   );
 }
 
-function LocationPicker({ onLocationSelect }: { onLocationSelect: (latlng: LatLng) => void }) {
-  useMapEvents({ click(e) { onLocationSelect(e.latlng); } });
-  return null;
+function VenueMarker({ latitude, longitude }: { latitude: number; longitude: number }) {
+  return (
+    <Marker latitude={latitude} longitude={longitude} anchor="bottom">
+      <svg width="32" height="40" viewBox="0 0 32 40" fill="none">
+        <path
+          d="M16 0C7.164 0 0 7.164 0 16c0 12 16 24 16 24s16-12 16-24c0-8.836-7.164-16-16-16z"
+          fill="#E85D4C"
+        />
+        <circle cx="16" cy="16" r="8" fill="white" />
+      </svg>
+    </Marker>
+  );
 }
 
 function ArrowLeftIcon({ className }: { className?: string }) {
@@ -460,17 +465,28 @@ export function VenuePage() {
               <label className="text-sm font-medium flex items-center gap-2">
                 <MapPinIcon className="w-4 h-4 text-primary" />
                 Location
+                <span className="text-muted-foreground font-normal">
+                  {editForm.latitude && editForm.longitude ? "(click map to change)" : "(click on map to set)"}
+                </span>
               </label>
-              <div className="h-64 map-container">
-                <MapContainer
-                  center={editForm.latitude && editForm.longitude ? [editForm.latitude, editForm.longitude] : SPITALFIELDS_CENTER}
-                  zoom={16}
-                  className="h-full w-full"
+              <div className="h-64 map-container rounded-xl overflow-hidden">
+                <Map
+                  initialViewState={
+                    editForm.latitude && editForm.longitude
+                      ? { latitude: editForm.latitude, longitude: editForm.longitude, zoom: 16 }
+                      : SPITALFIELDS_CENTER
+                  }
+                  style={{ width: "100%", height: "100%" }}
+                  mapStyle="mapbox://styles/mapbox/streets-v12"
+                  mapboxAccessToken={MAPBOX_TOKEN}
+                  onClick={(e: MapLayerMouseEvent) => setEditForm({ ...editForm, latitude: e.lngLat.lat, longitude: e.lngLat.lng })}
+                  cursor="crosshair"
                 >
-                  <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                  <LocationPicker onLocationSelect={(latlng) => setEditForm({ ...editForm, latitude: latlng.lat, longitude: latlng.lng })} />
-                  {editForm.latitude && editForm.longitude && <Marker position={[editForm.latitude, editForm.longitude]} icon={venueIcon} />}
-                </MapContainer>
+                  <NavigationControl position="top-right" />
+                  {editForm.latitude && editForm.longitude && (
+                    <VenueMarker latitude={editForm.latitude} longitude={editForm.longitude} />
+                  )}
+                </Map>
               </div>
             </div>
 
@@ -598,11 +614,21 @@ export function VenuePage() {
             )}
 
             {venue.latitude && venue.longitude && (
-              <div className="mt-6 h-56 map-container">
-                <MapContainer center={[venue.latitude, venue.longitude]} zoom={17} className="h-full w-full" scrollWheelZoom={false}>
-                  <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                  <Marker position={[venue.latitude, venue.longitude]} icon={venueIcon} />
-                </MapContainer>
+              <div className="mt-6 h-56 map-container rounded-xl overflow-hidden">
+                <Map
+                  initialViewState={{
+                    latitude: venue.latitude,
+                    longitude: venue.longitude,
+                    zoom: 17,
+                  }}
+                  style={{ width: "100%", height: "100%" }}
+                  mapStyle="mapbox://styles/mapbox/streets-v12"
+                  mapboxAccessToken={MAPBOX_TOKEN}
+                  scrollZoom={false}
+                >
+                  <NavigationControl position="top-right" />
+                  <VenueMarker latitude={venue.latitude} longitude={venue.longitude} />
+                </Map>
               </div>
             )}
 

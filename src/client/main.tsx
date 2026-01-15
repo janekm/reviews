@@ -5,7 +5,6 @@ import { ConvexReactClient } from "convex/react";
 import { AuthKitProvider, useAuth } from "@workos-inc/authkit-react";
 import { ConvexProviderWithAuthKit } from "@convex-dev/workos";
 import App from "./App";
-import "leaflet/dist/leaflet.css";
 import "./index.css";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);

@@ -1,25 +1,20 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
-import { Icon, type LatLng } from "leaflet";
+import Map, { Marker, NavigationControl, MapLayerMouseEvent } from "react-map-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { useAuth } from "../hooks/useAuth";
 
-const SPITALFIELDS_CENTER: [number, number] = [51.5197, -0.0754];
+const MAPBOX_TOKEN = "pk.eyJ1IjoiamFuZWttIiwiYSI6ImNta2ZuaGNlbTAweTkzZXF0a2hubWIxM2cifQ.ijlp5QVZz5idX4UBKgdVvA";
 
-const venueIcon = new Icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl:
-    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
+const SPITALFIELDS_CENTER = {
+  latitude: 51.5197,
+  longitude: -0.0754,
+  zoom: 16,
+};
 
 const VENUE_TYPES = [
   { value: "restaurant", label: "Restaurant", emoji: "🍽️" },
@@ -27,19 +22,6 @@ const VENUE_TYPES = [
   { value: "shop", label: "Shop", emoji: "🛍️" },
   { value: "bar", label: "Bar", emoji: "🍸" },
 ] as const;
-
-function LocationPicker({
-  onLocationSelect,
-}: {
-  onLocationSelect: (latlng: LatLng) => void;
-}) {
-  useMapEvents({
-    click(e) {
-      onLocationSelect(e.latlng);
-    },
-  });
-  return null;
-}
 
 function ArrowLeftIcon({ className }: { className?: string }) {
   return (
@@ -91,6 +73,10 @@ export function AddVenuePage() {
   );
 
   const createVenue = useMutation(api.venues.create);
+
+  const handleMapClick = useCallback((e: MapLayerMouseEvent) => {
+    setLocation({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+  }, []);
 
   if (!user) {
     return (
@@ -233,28 +219,34 @@ export function AddVenuePage() {
                   {location ? "(click map to change)" : "(click on map to set)"}
                 </span>
               </label>
-              <div className="h-72 map-container">
-                <MapContainer
-                  center={SPITALFIELDS_CENTER}
-                  zoom={16}
-                  className="h-full w-full"
+              <div className="h-72 map-container rounded-xl overflow-hidden">
+                <Map
+                  initialViewState={SPITALFIELDS_CENTER}
+                  style={{ width: "100%", height: "100%" }}
+                  mapStyle="mapbox://styles/mapbox/streets-v12"
+                  mapboxAccessToken={MAPBOX_TOKEN}
+                  onClick={handleMapClick}
+                  cursor="crosshair"
                 >
-                  <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
-                  <LocationPicker
-                    onLocationSelect={(latlng) =>
-                      setLocation({ lat: latlng.lat, lng: latlng.lng })
-                    }
-                  />
+                  <NavigationControl position="top-right" />
                   {location && (
                     <Marker
-                      position={[location.lat, location.lng]}
-                      icon={venueIcon}
-                    />
+                      latitude={location.lat}
+                      longitude={location.lng}
+                      anchor="bottom"
+                    >
+                      <div className="cursor-pointer">
+                        <svg width="32" height="40" viewBox="0 0 32 40" fill="none">
+                          <path
+                            d="M16 0C7.164 0 0 7.164 0 16c0 12 16 24 16 24s16-12 16-24c0-8.836-7.164-16-16-16z"
+                            fill="#E85D4C"
+                          />
+                          <circle cx="16" cy="16" r="8" fill="white" />
+                        </svg>
+                      </div>
+                    </Marker>
                   )}
-                </MapContainer>
+                </Map>
               </div>
               {location && (
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
