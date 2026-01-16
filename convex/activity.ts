@@ -1,6 +1,5 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
-import { Id } from "./_generated/dataModel";
 
 // Action type validator
 const actionTypeValidator = v.union(
@@ -11,19 +10,24 @@ const actionTypeValidator = v.union(
   v.literal("favorite_added")
 );
 
-// Activity item with details
+// Activity item with details (uses denormalized fields)
 const activityItemValidator = v.object({
   _id: v.id("activity"),
   _creationTime: v.number(),
   userId: v.id("users"),
   venueId: v.id("venues"),
   actionType: actionTypeValidator,
+  // Denormalized fields
+  userName: v.optional(v.string()),
+  userAvatarUrl: v.optional(v.string()),
+  venueName: v.optional(v.string()),
+  venueType: v.optional(v.string()),
   metadata: v.optional(v.any()),
   createdAt: v.number(),
+  // Computed for backward compatibility
   user: v.object({
     _id: v.id("users"),
     name: v.optional(v.string()),
-    email: v.string(),
     avatarUrl: v.optional(v.string()),
   }),
   venue: v.object({
@@ -35,6 +39,7 @@ const activityItemValidator = v.object({
 
 /**
  * List recent activity (global feed)
+ * Uses denormalized fields - no joins needed!
  */
 export const listRecent = query({
   args: {
@@ -50,36 +55,28 @@ export const listRecent = query({
       .order("desc")
       .take(limit);
 
-    const result: Array<typeof activityItemValidator.type> = [];
-
-    for (const activity of activities) {
-      const user = await ctx.db.get(activity.userId);
-      const venue = await ctx.db.get(activity.venueId);
-
-      if (!user || !venue) continue;
-
-      result.push({
+    // No joins needed - use denormalized fields
+    return activities
+      .filter((a) => a.venueName) // Only return activities with denormalized data
+      .map((activity) => ({
         ...activity,
         user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          avatarUrl: user.avatarUrl,
+          _id: activity.userId,
+          name: activity.userName,
+          avatarUrl: activity.userAvatarUrl,
         },
         venue: {
-          _id: venue._id,
-          name: venue.name,
-          type: venue.type,
+          _id: activity.venueId,
+          name: activity.venueName ?? "Unknown",
+          type: activity.venueType ?? "unknown",
         },
-      });
-    }
-
-    return result;
+      }));
   },
 });
 
 /**
  * List activity for a specific user
+ * Uses denormalized fields - no joins needed!
  */
 export const listByUser = query({
   args: {
@@ -96,36 +93,28 @@ export const listByUser = query({
       .order("desc")
       .take(limit);
 
-    const result: Array<typeof activityItemValidator.type> = [];
-    const user = await ctx.db.get(args.userId);
-    if (!user) return [];
-
-    for (const activity of activities) {
-      const venue = await ctx.db.get(activity.venueId);
-      if (!venue) continue;
-
-      result.push({
+    // No joins needed - use denormalized fields
+    return activities
+      .filter((a) => a.venueName)
+      .map((activity) => ({
         ...activity,
         user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          avatarUrl: user.avatarUrl,
+          _id: activity.userId,
+          name: activity.userName,
+          avatarUrl: activity.userAvatarUrl,
         },
         venue: {
-          _id: venue._id,
-          name: venue.name,
-          type: venue.type,
+          _id: activity.venueId,
+          name: activity.venueName ?? "Unknown",
+          type: activity.venueType ?? "unknown",
         },
-      });
-    }
-
-    return result;
+      }));
   },
 });
 
 /**
  * List activity for a specific venue
+ * Uses denormalized fields and by_venue index - no joins, no table scans!
  */
 export const listByVenue = query({
   args: {
@@ -136,83 +125,57 @@ export const listByVenue = query({
   handler: async (ctx, args) => {
     const limit = args.limit ?? 50;
 
-    // We need to query all and filter since we don't have a by_venue index
-    // This is acceptable for small amounts of data
-    const allActivities = await ctx.db
+    // Use the by_venue index (O(1) lookup instead of table scan)
+    const activities = await ctx.db
       .query("activity")
-      .withIndex("by_created_at")
+      .withIndex("by_venue", (q) => q.eq("venueId", args.venueId))
       .order("desc")
-      .collect();
+      .take(limit);
 
-    const venueActivities = allActivities
-      .filter((a) => a.venueId === args.venueId)
-      .slice(0, limit);
-
-    const result: Array<typeof activityItemValidator.type> = [];
-    const venue = await ctx.db.get(args.venueId);
-    if (!venue) return [];
-
-    for (const activity of venueActivities) {
-      const user = await ctx.db.get(activity.userId);
-      if (!user) continue;
-
-      result.push({
+    // No joins needed - use denormalized fields
+    return activities
+      .filter((a) => a.venueName)
+      .map((activity) => ({
         ...activity,
         user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          avatarUrl: user.avatarUrl,
+          _id: activity.userId,
+          name: activity.userName,
+          avatarUrl: activity.userAvatarUrl,
         },
         venue: {
-          _id: venue._id,
-          name: venue.name,
-          type: venue.type,
+          _id: activity.venueId,
+          name: activity.venueName ?? "Unknown",
+          type: activity.venueType ?? "unknown",
         },
-      });
-    }
-
-    return result;
+      }));
   },
 });
 
 /**
  * Get activity stats (for dashboard)
+ * Returns only recent activity count to avoid full table scans
+ * Note: For total counts, consider maintaining denormalized counters in a stats table
  */
 export const getStats = query({
   args: {},
   returns: v.object({
-    totalReviews: v.number(),
-    totalPhotos: v.number(),
-    totalVenues: v.number(),
     recentActivityCount: v.number(),
   }),
   handler: async (ctx) => {
-    // Count activities by type
-    const allActivities = await ctx.db.query("activity").collect();
-
-    const reviewCount = allActivities.filter(
-      (a) => a.actionType === "review_created"
-    ).length;
-
-    const photoCount = allActivities.filter(
-      (a) => a.actionType === "photo_added"
-    ).length;
-
-    const venueCount = allActivities.filter(
-      (a) => a.actionType === "venue_created"
-    ).length;
-
-    // Recent activity (last 7 days)
+    // Recent activity (last 7 days) - use index, bounded query
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const recentCount = allActivities.filter(
+
+    const recentActivities = await ctx.db
+      .query("activity")
+      .withIndex("by_created_at")
+      .order("desc")
+      .take(100); // Only fetch enough to count recent activity
+
+    const recentCount = recentActivities.filter(
       (a) => a.createdAt > sevenDaysAgo
     ).length;
 
     return {
-      totalReviews: reviewCount,
-      totalPhotos: photoCount,
-      totalVenues: venueCount,
       recentActivityCount: recentCount,
     };
   },

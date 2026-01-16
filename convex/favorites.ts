@@ -40,6 +40,7 @@ export const isFavorite = query({
 
 /**
  * List all favorites for the current user
+ * Uses denormalized venue fields - no joins needed!
  */
 export const listMine = query({
   args: {},
@@ -49,6 +50,9 @@ export const listMine = query({
       _creationTime: v.number(),
       userId: v.id("users"),
       venueId: v.id("venues"),
+      venueName: v.optional(v.string()),
+      venueType: v.optional(v.string()),
+      venueAddress: v.optional(v.string()),
       createdAt: v.number(),
       venue: v.object({
         _id: v.id("venues"),
@@ -68,38 +72,20 @@ export const listMine = query({
       .query("favorites")
       .withIndex("by_user", (q) => q.eq("userId", currentUser._id))
       .order("desc")
-      .collect();
+      .take(100); // Limit to prevent unbounded queries
 
-    const result: Array<{
-      _id: Id<"favorites">;
-      _creationTime: number;
-      userId: Id<"users">;
-      venueId: Id<"venues">;
-      createdAt: number;
-      venue: {
-        _id: Id<"venues">;
-        name: string;
-        type: string;
-        address: string;
-      };
-    }> = [];
-
-    for (const favorite of favorites) {
-      const venue = await ctx.db.get(favorite.venueId);
-      if (!venue) continue;
-
-      result.push({
+    // No venue joins needed - use denormalized fields
+    return favorites
+      .filter((f) => f.venueName) // Only return favorites with denormalized data
+      .map((favorite) => ({
         ...favorite,
         venue: {
-          _id: venue._id,
-          name: venue.name,
-          type: venue.type,
-          address: venue.address,
+          _id: favorite.venueId,
+          name: favorite.venueName ?? "Unknown",
+          type: favorite.venueType ?? "unknown",
+          address: favorite.venueAddress ?? "",
         },
-      });
-    }
-
-    return result;
+      }));
   },
 });
 
@@ -158,14 +144,22 @@ export const add = mutation({
     const favoriteId = await ctx.db.insert("favorites", {
       userId: currentUser._id,
       venueId: args.venueId,
+      // Denormalized venue info (avoids joins on read)
+      venueName: venue.name,
+      venueType: venue.type,
+      venueAddress: venue.address,
       createdAt: now,
     });
 
-    // Create activity entry
+    // Create activity entry with denormalized user/venue info
     await ctx.db.insert("activity", {
       userId: currentUser._id,
       venueId: args.venueId,
       actionType: "favorite_added",
+      userName: currentUser.name,
+      userAvatarUrl: currentUser.avatarUrl,
+      venueName: venue.name,
+      venueType: venue.type,
       createdAt: now,
     });
 
@@ -230,19 +224,27 @@ export const toggle = mutation({
       await ctx.db.delete(existing._id);
       return false;
     } else {
-      // Add favorite
+      // Add favorite with denormalized venue info
       const now = Date.now();
       await ctx.db.insert("favorites", {
         userId: currentUser._id,
         venueId: args.venueId,
+        // Denormalized venue info (avoids joins on read)
+        venueName: venue.name,
+        venueType: venue.type,
+        venueAddress: venue.address,
         createdAt: now,
       });
 
-      // Create activity entry
+      // Create activity entry with denormalized user/venue info
       await ctx.db.insert("activity", {
         userId: currentUser._id,
         venueId: args.venueId,
         actionType: "favorite_added",
+        userName: currentUser.name,
+        userAvatarUrl: currentUser.avatarUrl,
+        venueName: venue.name,
+        venueType: venue.type,
         createdAt: now,
       });
 

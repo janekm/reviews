@@ -264,6 +264,21 @@
     border: 1px solid hsl(var(--border));
   }
 
+  .map-container .mapboxgl-map {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  .map-container .mapboxgl-canvas {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  .map-container .mapboxgl-ctrl-bottom-left,
+  .map-container .mapboxgl-ctrl-bottom-right {
+    bottom: 0;
+  }
+
   /* Minimal scrollbar */
   .custom-scrollbar::-webkit-scrollbar {
     width: 4px;

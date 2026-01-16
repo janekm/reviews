@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { Doc, Id } from "./_generated/dataModel";
 import { hasMinRole } from "./users";
 
-// Return type for review with author info
+// Return type for review with author info (uses denormalized fields)
 const reviewWithAuthorValidator = v.object({
   _id: v.id("reviews"),
   _creationTime: v.number(),
@@ -12,8 +12,12 @@ const reviewWithAuthorValidator = v.object({
   rating: v.number(),
   content: v.string(),
   visitedAt: v.optional(v.number()),
+  authorName: v.optional(v.string()),
+  authorEmail: v.optional(v.string()),
+  authorAvatarUrl: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number(),
+  // Computed at query time
   author: v.object({
     _id: v.id("users"),
     name: v.optional(v.string()),
@@ -37,33 +41,66 @@ async function getCurrentUser(ctx: any) {
     .unique();
 }
 
-// Helper to recalculate and update venue review stats
-async function updateVenueReviewStats(ctx: any, venueId: Id<"venues">) {
-  const reviews = await ctx.db
-    .query("reviews")
-    .withIndex("by_venue", (q: any) => q.eq("venueId", venueId))
-    .collect();
+// Helper to incrementally update venue review stats (avoids full recalculation race conditions)
+async function incrementReviewStats(ctx: any, venueId: Id<"venues">, newRating: number) {
+  const venue = await ctx.db.get(venueId);
+  if (!venue) return;
 
-  const reviewCount = reviews.length;
-  const avgRating = reviewCount > 0
-    ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / reviewCount
-    : undefined;
+  const oldCount = venue.reviewCount ?? 0;
+  const oldAvg = venue.avgRating ?? 0;
+  const newCount = oldCount + 1;
+  // New average: ((oldAvg * oldCount) + newRating) / newCount
+  const newAvg = oldCount === 0 ? newRating : ((oldAvg * oldCount) + newRating) / newCount;
 
   await ctx.db.patch(venueId, {
-    reviewCount,
-    avgRating,
+    reviewCount: newCount,
+    avgRating: newAvg,
+    updatedAt: Date.now(),
+  });
+}
+
+async function updateReviewStatsOnRatingChange(ctx: any, venueId: Id<"venues">, oldRating: number, newRating: number) {
+  const venue = await ctx.db.get(venueId);
+  if (!venue) return;
+
+  const count = venue.reviewCount ?? 1;
+  const oldAvg = venue.avgRating ?? oldRating;
+  // Update average: ((oldAvg * count) - oldRating + newRating) / count
+  const newAvg = count === 1 ? newRating : ((oldAvg * count) - oldRating + newRating) / count;
+
+  await ctx.db.patch(venueId, {
+    avgRating: newAvg,
+    updatedAt: Date.now(),
+  });
+}
+
+async function decrementReviewStats(ctx: any, venueId: Id<"venues">, deletedRating: number) {
+  const venue = await ctx.db.get(venueId);
+  if (!venue) return;
+
+  const oldCount = venue.reviewCount ?? 1;
+  const oldAvg = venue.avgRating ?? deletedRating;
+  const newCount = Math.max(0, oldCount - 1);
+  // New average: ((oldAvg * oldCount) - deletedRating) / newCount
+  const newAvg = newCount === 0 ? undefined : ((oldAvg * oldCount) - deletedRating) / newCount;
+
+  await ctx.db.patch(venueId, {
+    reviewCount: newCount,
+    avgRating: newAvg,
     updatedAt: Date.now(),
   });
 }
 
 /**
  * List reviews for a venue
+ * Uses denormalized author fields - no joins needed!
  */
 export const listByVenue = query({
   args: { venueId: v.id("venues") },
   returns: v.array(reviewWithAuthorValidator),
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
+    const isAdmin = currentUser && hasMinRole(currentUser.role, "admin");
 
     const reviews = await ctx.db
       .query("reviews")
@@ -71,34 +108,28 @@ export const listByVenue = query({
       .order("desc")
       .collect();
 
-    const result: Array<typeof reviewWithAuthorValidator.type> = [];
-
-    for (const review of reviews) {
-      const author = await ctx.db.get(review.userId);
-      if (!author) continue;
-
+    // No joins needed - use denormalized author fields
+    return reviews.map((review) => {
       const isOwner = currentUser?._id === review.userId;
-      const isAdmin = currentUser && hasMinRole(currentUser.role, "admin");
-
-      result.push({
+      return {
         ...review,
         author: {
-          _id: author._id,
-          name: author.name,
-          email: author.email,
-          avatarUrl: author.avatarUrl,
+          _id: review.userId,
+          name: review.authorName,
+          email: review.authorEmail ?? "",
+          avatarUrl: review.authorAvatarUrl,
         },
         canEdit: isOwner || false,
         canDelete: isOwner || isAdmin || false,
-      });
-    }
-
-    return result;
+      };
+    });
   },
 });
 
 /**
  * List reviews by a user
+ * Note: This query still needs to fetch venue info. Consider denormalizing
+ * venueName/venueType onto reviews if this becomes a hot path.
  */
 export const listByUser = query({
   args: { userId: v.id("users") },
@@ -122,34 +153,22 @@ export const listByUser = query({
       .query("reviews")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .order("desc")
-      .collect();
+      .take(50); // Limit to prevent unbounded queries
 
-    const result: Array<{
-      _id: Id<"reviews">;
-      _creationTime: number;
-      venueId: Id<"venues">;
-      userId: Id<"users">;
-      rating: number;
-      content: string;
-      visitedAt?: number;
-      createdAt: number;
-      updatedAt: number;
-      venueName: string;
-      venueType: string;
-    }> = [];
+    // Batch load venues (still needed since venueName not denormalized on reviews)
+    const venueIds = [...new Set(reviews.map((r) => r.venueId))];
+    const venues = await Promise.all(venueIds.map((id) => ctx.db.get(id)));
+    const venueMap = new Map(
+      venues.filter((v): v is Doc<"venues"> => v !== null).map((v) => [v._id, v])
+    );
 
-    for (const review of reviews) {
-      const venue = await ctx.db.get(review.venueId);
-      if (!venue) continue;
-
-      result.push({
+    return reviews
+      .filter((r) => venueMap.has(r.venueId))
+      .map((review) => ({
         ...review,
-        venueName: venue.name,
-        venueType: venue.type,
-      });
-    }
-
-    return result;
+        venueName: venueMap.get(review.venueId)!.name,
+        venueType: venueMap.get(review.venueId)!.type,
+      }));
   },
 });
 
@@ -274,21 +293,29 @@ export const create = mutation({
       rating: args.rating,
       content: args.content,
       visitedAt: args.visitedAt,
+      // Denormalized author info (avoids joins on read)
+      authorName: currentUser.name,
+      authorEmail: currentUser.email,
+      authorAvatarUrl: currentUser.avatarUrl,
       createdAt: now,
       updatedAt: now,
     });
 
-    // Create activity entry
+    // Create activity entry with denormalized user/venue info
     await ctx.db.insert("activity", {
       userId: currentUser._id,
       venueId: args.venueId,
       actionType: "review_created",
+      userName: currentUser.name,
+      userAvatarUrl: currentUser.avatarUrl,
+      venueName: venue.name,
+      venueType: venue.type,
       metadata: { reviewId, rating: args.rating },
       createdAt: now,
     });
 
-    // Update venue stats
-    await updateVenueReviewStats(ctx, args.venueId);
+    // Incrementally update venue stats (avoids race conditions)
+    await incrementReviewStats(ctx, args.venueId, args.rating);
 
     return reviewId;
   },
@@ -334,18 +361,25 @@ export const update = mutation({
 
     await ctx.db.patch(args.id, updates);
 
-    // Create activity entry
+    // Get venue for activity denormalization
+    const venue = await ctx.db.get(review.venueId);
+
+    // Create activity entry with denormalized info
     await ctx.db.insert("activity", {
       userId: currentUser._id,
       venueId: review.venueId,
       actionType: "review_updated",
+      userName: currentUser.name,
+      userAvatarUrl: currentUser.avatarUrl,
+      venueName: venue?.name,
+      venueType: venue?.type,
       metadata: { reviewId: args.id },
       createdAt: now,
     });
 
-    // Update venue stats if rating changed
-    if (args.rating !== undefined) {
-      await updateVenueReviewStats(ctx, review.venueId);
+    // Update venue stats if rating changed (incremental update avoids race conditions)
+    if (args.rating !== undefined && args.rating !== review.rating) {
+      await updateReviewStatsOnRatingChange(ctx, review.venueId, review.rating, args.rating);
     }
 
     return null;
@@ -376,10 +410,11 @@ export const remove = mutation({
     }
 
     const venueId = review.venueId;
+    const deletedRating = review.rating;
     await ctx.db.delete(args.id);
 
-    // Update venue stats
-    await updateVenueReviewStats(ctx, venueId);
+    // Decrementally update venue stats (avoids race conditions)
+    await decrementReviewStats(ctx, venueId, deletedRating);
 
     return null;
   },

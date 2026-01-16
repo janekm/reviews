@@ -55,6 +55,10 @@ export default defineSchema({
     rating: v.number(),
     content: v.string(),
     visitedAt: v.optional(v.number()),
+    // Denormalized author info (avoids joins)
+    authorName: v.optional(v.string()),
+    authorEmail: v.optional(v.string()),
+    authorAvatarUrl: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -70,6 +74,9 @@ export default defineSchema({
     storageKey: v.string(), // R2 path or Convex storage key
     originalFilename: v.optional(v.string()),
     caption: v.optional(v.string()),
+    // Denormalized uploader info (avoids joins)
+    uploaderName: v.optional(v.string()),
+    uploaderEmail: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_venue", ["venueId"])
@@ -79,6 +86,10 @@ export default defineSchema({
   favorites: defineTable({
     userId: v.id("users"),
     venueId: v.id("venues"),
+    // Denormalized venue info (avoids joins)
+    venueName: v.optional(v.string()),
+    venueType: v.optional(v.string()),
+    venueAddress: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_user", ["userId"])
@@ -95,7 +106,20 @@ export default defineSchema({
       v.literal("venue_created"),
       v.literal("favorite_added")
     ),
-    metadata: v.optional(v.any()),
+    // Denormalized user/venue info (avoids joins)
+    userName: v.optional(v.string()),
+    userAvatarUrl: v.optional(v.string()),
+    venueName: v.optional(v.string()),
+    venueType: v.optional(v.string()),
+    // Typed metadata based on action type
+    metadata: v.optional(
+      v.union(
+        v.object({ reviewId: v.id("reviews"), rating: v.number() }), // review_created
+        v.object({ reviewId: v.id("reviews") }), // review_updated
+        v.object({ photoId: v.id("photos"), reviewId: v.optional(v.id("reviews")) }), // photo_added
+        v.null() // venue_created, favorite_added
+      )
+    ),
     createdAt: v.number(),
   })
     .index("by_user", ["userId"])

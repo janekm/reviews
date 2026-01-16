@@ -11,7 +11,7 @@ import type { Id } from "../../../convex/_generated/dataModel";
 
 type VenueType = "restaurant" | "cafe" | "shop" | "bar";
 
-const MAPBOX_TOKEN = "pk.eyJ1IjoiamFuZWttIiwiYSI6ImNta2ZuaGNlbTAweTkzZXF0a2hubWIxM2cifQ.ijlp5QVZz5idX4UBKgdVvA";
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "pk.eyJ1IjoiamFuZWttIiwiYSI6ImNta2ZuaGNlbTAweTkzZXF0a2hubWIxM2cifQ.ijlp5QVZz5idX4UBKgdVvA";
 
 const SPITALFIELDS_CENTER = {
   latitude: 51.5197,
@@ -150,12 +150,13 @@ function MapMarker({
         }}
       >
         <div className="cursor-pointer transform hover:scale-110 transition-transform">
-          <svg width="32" height="40" viewBox="0 0 32 40" fill="none">
+          <svg width="24" height="30" viewBox="0 0 24 30" fill="none">
             <path
-              d="M16 0C7.164 0 0 7.164 0 16c0 12 16 24 16 24s16-12 16-24c0-8.836-7.164-16-16-16z"
+              d="M12 0C5.373 0 0 5.373 0 12c0 9 12 18 12 18s12-9 12-18c0-6.627-5.373-12-12-12z"
               fill="#E85D4C"
+              fillOpacity="0.85"
             />
-            <circle cx="16" cy="16" r="8" fill="white" />
+            <circle cx="12" cy="12" r="5" fill="white" fillOpacity="0.9" />
           </svg>
         </div>
       </Marker>
@@ -166,7 +167,7 @@ function MapMarker({
           anchor="bottom"
           onClose={() => onSelect(null)}
           closeOnClick={false}
-          offset={[0, -40] as [number, number]}
+          offset={[0, -30] as [number, number]}
         >
           <div className="min-w-52 -m-2.5">
             {venue.mainPhotoStorageKey && (

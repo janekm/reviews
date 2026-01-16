@@ -19,7 +19,7 @@ const photoValidator = v.object({
   createdAt: v.number(),
 });
 
-// Photo with computed fields
+// Photo with computed fields (uses denormalized uploader info)
 const photoWithDetailsValidator = v.object({
   _id: v.id("photos"),
   _creationTime: v.number(),
@@ -28,6 +28,8 @@ const photoWithDetailsValidator = v.object({
   userId: v.id("users"),
   storageId: v.optional(v.id("_storage")),
   storageKey: v.string(),
+  uploaderName: v.optional(v.string()),
+  uploaderEmail: v.optional(v.string()),
   originalFilename: v.optional(v.string()),
   caption: v.optional(v.string()),
   createdAt: v.number(),
@@ -53,86 +55,70 @@ async function getCurrentUser(ctx: any) {
     .unique();
 }
 
-// Helper to recalculate and update venue photo stats
-async function updateVenuePhotoStats(ctx: any, venueId: Id<"venues">) {
-  const photos = await ctx.db
-    .query("photos")
-    .withIndex("by_venue", (q: any) => q.eq("venueId", venueId))
-    .collect();
-
-  const photoCount = photos.length;
-
-  // Get the venue to check current main photo
+// Helper to incrementally update venue photo count (avoids full recalculation race conditions)
+async function incrementPhotoCount(ctx: any, venueId: Id<"venues">) {
   const venue = await ctx.db.get(venueId);
   if (!venue) return;
 
-  // Get the main photo storage key if main photo exists
-  let mainPhotoStorageKey: string | undefined;
-  if (venue.mainPhotoId) {
-    const mainPhoto = await ctx.db.get(venue.mainPhotoId);
-    mainPhotoStorageKey = mainPhoto?.storageKey;
-  }
+  await ctx.db.patch(venueId, {
+    photoCount: (venue.photoCount ?? 0) + 1,
+    updatedAt: Date.now(),
+  });
+}
+
+async function decrementPhotoCount(ctx: any, venueId: Id<"venues">) {
+  const venue = await ctx.db.get(venueId);
+  if (!venue) return;
 
   await ctx.db.patch(venueId, {
-    photoCount,
-    mainPhotoStorageKey,
+    photoCount: Math.max(0, (venue.photoCount ?? 1) - 1),
     updatedAt: Date.now(),
   });
 }
 
 /**
  * List photos for a venue
+ * Uses denormalized uploader fields - no joins needed!
+ * All photos use R2 storage with storageKey as the URL path
  */
 export const listByVenue = query({
-  args: { venueId: v.id("venues") },
+  args: {
+    venueId: v.id("venues"),
+    limit: v.optional(v.number()),
+  },
   returns: v.array(photoWithDetailsValidator),
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
+    const isEditor = currentUser && hasMinRole(currentUser.role, "editor");
+    const limit = args.limit ?? 50;
 
     const photos = await ctx.db
       .query("photos")
       .withIndex("by_venue", (q) => q.eq("venueId", args.venueId))
       .order("desc")
-      .collect();
+      .take(limit);
 
-    const result: Array<typeof photoWithDetailsValidator.type> = [];
-
-    for (const photo of photos) {
-      const uploader = await ctx.db.get(photo.userId);
-      if (!uploader) continue;
-
-      // Get URL - either from Convex storage or construct ImageKit URL for R2
-      let url: string | null = null;
-      if (photo.storageId) {
-        // New photo in Convex storage
-        url = await ctx.storage.getUrl(photo.storageId);
-      } else if (photo.storageKey) {
-        // Legacy photo in R2 - use ImageKit URL
-        // ImageKit URL will be constructed on the client side
-        url = photo.storageKey;
-      }
-
+    // All photos use R2 - storageKey is the URL path, no fetches needed
+    return photos.map((photo) => {
       const isOwner = currentUser?._id === photo.userId;
-      const isEditor = currentUser && hasMinRole(currentUser.role, "editor");
 
-      result.push({
+      return {
         ...photo,
-        url,
+        url: photo.storageKey, // R2 path used directly by ImageKit CDN
         uploader: {
-          _id: uploader._id,
-          name: uploader.name,
-          email: uploader.email,
+          _id: photo.userId,
+          name: photo.uploaderName,
+          email: photo.uploaderEmail ?? "",
         },
         canDelete: isOwner || isEditor || false,
-      });
-    }
-
-    return result;
+      };
+    });
   },
 });
 
 /**
  * Get a single photo
+ * Uses denormalized uploader fields - no joins needed!
  */
 export const get = query({
   args: { id: v.id("photos") },
@@ -145,28 +131,16 @@ export const get = query({
       return null;
     }
 
-    const uploader = await ctx.db.get(photo.userId);
-    if (!uploader) {
-      return null;
-    }
-
-    let url: string | null = null;
-    if (photo.storageId) {
-      url = await ctx.storage.getUrl(photo.storageId);
-    } else if (photo.storageKey) {
-      url = photo.storageKey;
-    }
-
     const isOwner = currentUser?._id === photo.userId;
     const isEditor = currentUser && hasMinRole(currentUser.role, "editor");
 
     return {
       ...photo,
-      url,
+      url: photo.storageKey, // R2 path used directly by ImageKit CDN
       uploader: {
-        _id: uploader._id,
-        name: uploader.name,
-        email: uploader.email,
+        _id: photo.userId,
+        name: photo.uploaderName,
+        email: photo.uploaderEmail ?? "",
       },
       canDelete: isOwner || isEditor || false,
     };
@@ -302,14 +276,21 @@ export const savePhotoRecord = internalMutation({
       storageKey: args.storageKey,
       originalFilename: args.originalFilename,
       caption: args.caption,
+      // Denormalized uploader info (avoids joins on read)
+      uploaderName: currentUser.name,
+      uploaderEmail: currentUser.email,
       createdAt: now,
     });
 
-    // Create activity entry
+    // Create activity entry with denormalized user/venue info
     await ctx.db.insert("activity", {
       userId: currentUser._id,
       venueId: args.venueId,
       actionType: "photo_added",
+      userName: currentUser.name,
+      userAvatarUrl: currentUser.avatarUrl,
+      venueName: venue.name,
+      venueType: venue.type,
       metadata: { photoId: id, reviewId: args.reviewId },
       createdAt: now,
     });
@@ -323,8 +304,8 @@ export const savePhotoRecord = internalMutation({
       });
     }
 
-    // Update venue photo stats
-    await updateVenuePhotoStats(ctx, args.venueId);
+    // Increment venue photo count
+    await incrementPhotoCount(ctx, args.venueId);
 
     return id;
   },
@@ -407,14 +388,21 @@ export const savePhoto = mutation({
       storageKey,
       originalFilename: args.originalFilename,
       caption: args.caption,
+      // Denormalized uploader info (avoids joins on read)
+      uploaderName: currentUser.name,
+      uploaderEmail: currentUser.email,
       createdAt: now,
     });
 
-    // Create activity entry
+    // Create activity entry with denormalized user/venue info
     await ctx.db.insert("activity", {
       userId: currentUser._id,
       venueId: args.venueId,
       actionType: "photo_added",
+      userName: currentUser.name,
+      userAvatarUrl: currentUser.avatarUrl,
+      venueName: venue.name,
+      venueType: venue.type,
       metadata: { photoId: id, reviewId: args.reviewId },
       createdAt: now,
     });
@@ -428,8 +416,8 @@ export const savePhoto = mutation({
       });
     }
 
-    // Update venue photo stats
-    await updateVenuePhotoStats(ctx, args.venueId);
+    // Increment venue photo count
+    await incrementPhotoCount(ctx, args.venueId);
 
     return id;
   },
@@ -437,12 +425,15 @@ export const savePhoto = mutation({
 
 /**
  * List photos for a review
+ * Uses denormalized uploader fields - no joins needed!
+ * All photos use R2 storage with storageKey as the URL path
  */
 export const listByReview = query({
   args: { reviewId: v.id("reviews") },
   returns: v.array(photoWithDetailsValidator),
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
+    const isEditor = currentUser && hasMinRole(currentUser.role, "editor");
 
     const photos = await ctx.db
       .query("photos")
@@ -450,35 +441,21 @@ export const listByReview = query({
       .order("desc")
       .collect();
 
-    const result: Array<typeof photoWithDetailsValidator.type> = [];
-
-    for (const photo of photos) {
-      const uploader = await ctx.db.get(photo.userId);
-      if (!uploader) continue;
-
-      let url: string | null = null;
-      if (photo.storageId) {
-        url = await ctx.storage.getUrl(photo.storageId);
-      } else if (photo.storageKey) {
-        url = photo.storageKey;
-      }
-
+    // All photos use R2 - storageKey is the URL path, no fetches needed
+    return photos.map((photo) => {
       const isOwner = currentUser?._id === photo.userId;
-      const isEditor = currentUser && hasMinRole(currentUser.role, "editor");
 
-      result.push({
+      return {
         ...photo,
-        url,
+        url: photo.storageKey, // R2 path used directly by ImageKit CDN
         uploader: {
-          _id: uploader._id,
-          name: uploader.name,
-          email: uploader.email,
+          _id: photo.userId,
+          name: photo.uploaderName,
+          email: photo.uploaderEmail ?? "",
         },
         canDelete: isOwner || isEditor || false,
-      });
-    }
-
-    return result;
+      };
+    });
   },
 });
 
@@ -562,8 +539,8 @@ export const remove = mutation({
     // Delete the photo record
     await ctx.db.delete(args.id);
 
-    // Update venue photo stats
-    await updateVenuePhotoStats(ctx, venueId);
+    // Decrement venue photo count
+    await decrementPhotoCount(ctx, venueId);
 
     return null;
   },

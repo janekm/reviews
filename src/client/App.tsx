@@ -1,13 +1,15 @@
-import { Suspense } from "react";
+import { Suspense, lazy } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Layout } from "./components/Layout";
-import { HomePage } from "./pages/HomePage";
-import { VenuePage } from "./pages/VenuePage";
-import { AddVenuePage } from "./pages/AddVenuePage";
 import { LoginPage } from "./pages/LoginPage";
-import { AdminPage } from "./pages/AdminPage";
-import { FavoritesPage } from "./pages/FavoritesPage";
 import { CallbackPage } from "./pages/CallbackPage";
+
+// Lazy load heavy pages (contain Mapbox)
+const HomePage = lazy(() => import("./pages/HomePage").then(m => ({ default: m.HomePage })));
+const VenuePage = lazy(() => import("./pages/VenuePage").then(m => ({ default: m.VenuePage })));
+const AddVenuePage = lazy(() => import("./pages/AddVenuePage").then(m => ({ default: m.AddVenuePage })));
+const AdminPage = lazy(() => import("./pages/AdminPage").then(m => ({ default: m.AdminPage })));
+const FavoritesPage = lazy(() => import("./pages/FavoritesPage").then(m => ({ default: m.FavoritesPage })));
 
 function PageLoader() {
   return (

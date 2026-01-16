@@ -239,19 +239,18 @@ export const get = query({
   },
 });
 
+// Known venue types (avoids scanning all venues)
+const VENUE_TYPES = ["bar", "cafe", "restaurant", "shop"] as const;
+
 /**
  * Get all venue types
+ * Returns hardcoded list to avoid scanning all venues
  */
 export const getTypes = query({
   args: {},
   returns: v.array(v.string()),
-  handler: async (ctx) => {
-    const venues = await ctx.db.query("venues").collect();
-    const types = new Set<string>();
-    for (const venue of venues) {
-      types.add(venue.type);
-    }
-    return Array.from(types).sort();
+  handler: async () => {
+    return [...VENUE_TYPES];
   },
 });
 
@@ -272,9 +271,9 @@ export const create = mutation({
   },
   returns: v.id("venues"),
   handler: async (ctx, args) => {
-    const user = await getCurrentUserWithRole(ctx, "editor");
+    const user = await getCurrentUserWithRole(ctx, "user");
     if (!user) {
-      throw new Error("Only editors and admins can create venues");
+      throw new Error("You must be signed in to create venues");
     }
 
     const now = Date.now();
@@ -286,11 +285,15 @@ export const create = mutation({
       updatedAt: now,
     });
 
-    // Create activity entry
+    // Create activity entry with denormalized user/venue info
     await ctx.db.insert("activity", {
       userId: user._id,
       venueId,
       actionType: "venue_created",
+      userName: user.name,
+      userAvatarUrl: user.avatarUrl,
+      venueName: args.name,
+      venueType: args.type,
       createdAt: now,
     });
 
@@ -390,6 +393,7 @@ export const setMainPhoto = mutation({
 
 /**
  * Delete a venue (admin only)
+ * Uses batched deletion to avoid timeouts with large datasets
  */
 export const remove = mutation({
   args: { id: v.id("venues") },
@@ -405,35 +409,42 @@ export const remove = mutation({
       throw new Error("Venue not found");
     }
 
-    // Delete related data
-    // Delete reviews
+    const BATCH_SIZE = 100;
+
+    // Delete reviews in batches
     const reviews = await ctx.db
       .query("reviews")
       .withIndex("by_venue", (q) => q.eq("venueId", args.id))
-      .collect();
+      .take(BATCH_SIZE);
     for (const review of reviews) {
       await ctx.db.delete(review._id);
     }
 
-    // Delete photos
+    // Delete photos in batches
     const photos = await ctx.db
       .query("photos")
       .withIndex("by_venue", (q) => q.eq("venueId", args.id))
-      .collect();
+      .take(BATCH_SIZE);
     for (const photo of photos) {
-      if (photo.storageId) {
-        await ctx.storage.delete(photo.storageId);
-      }
       await ctx.db.delete(photo._id);
     }
 
-    // Delete favorites
+    // Delete favorites in batches
     const favorites = await ctx.db
       .query("favorites")
       .withIndex("by_venue", (q) => q.eq("venueId", args.id))
-      .collect();
+      .take(BATCH_SIZE);
     for (const favorite of favorites) {
       await ctx.db.delete(favorite._id);
+    }
+
+    // Delete activity records in batches
+    const activities = await ctx.db
+      .query("activity")
+      .withIndex("by_venue", (q) => q.eq("venueId", args.id))
+      .take(BATCH_SIZE);
+    for (const activity of activities) {
+      await ctx.db.delete(activity._id);
     }
 
     // Delete venue

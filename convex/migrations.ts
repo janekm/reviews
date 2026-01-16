@@ -514,3 +514,96 @@ export const backfillVenueStats = internalMutation({
     };
   },
 });
+
+/**
+ * Migration: Backfill denormalized fields on reviews, photos, favorites, and activity
+ * This populates author/uploader info, venue info, etc. to eliminate join queries
+ */
+export const backfillDenormalizedFields = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    // Load all data first for efficient lookups
+    const allUsers = await ctx.db.query("users").collect();
+    const allVenues = await ctx.db.query("venues").collect();
+    const allReviews = await ctx.db.query("reviews").collect();
+    const allPhotos = await ctx.db.query("photos").collect();
+    const allFavorites = await ctx.db.query("favorites").collect();
+    const allActivity = await ctx.db.query("activity").collect();
+
+    // Create lookup maps
+    const usersById = new Map(allUsers.map(u => [u._id as string, u]));
+    const venuesById = new Map(allVenues.map(v => [v._id as string, v]));
+
+    const stats = {
+      reviews: 0,
+      photos: 0,
+      favorites: 0,
+      activity: 0,
+    };
+
+    // Backfill reviews with author info
+    for (const review of allReviews) {
+      const user = usersById.get(review.userId as string);
+      if (user && !review.authorName) {
+        await ctx.db.patch(review._id, {
+          authorName: user.name,
+          authorEmail: user.email,
+          authorAvatarUrl: user.avatarUrl,
+        });
+        stats.reviews++;
+      }
+    }
+
+    // Backfill photos with uploader info
+    for (const photo of allPhotos) {
+      const user = usersById.get(photo.userId as string);
+      if (user && !photo.uploaderName) {
+        await ctx.db.patch(photo._id, {
+          uploaderName: user.name,
+          uploaderEmail: user.email,
+        });
+        stats.photos++;
+      }
+    }
+
+    // Backfill favorites with venue info
+    for (const favorite of allFavorites) {
+      const venue = venuesById.get(favorite.venueId as string);
+      if (venue && !favorite.venueName) {
+        await ctx.db.patch(favorite._id, {
+          venueName: venue.name,
+          venueType: venue.type,
+          venueAddress: venue.address,
+        });
+        stats.favorites++;
+      }
+    }
+
+    // Backfill activity with user and venue info
+    for (const activity of allActivity) {
+      const user = usersById.get(activity.userId as string);
+      const venue = venuesById.get(activity.venueId as string);
+
+      if ((user || venue) && !activity.userName && !activity.venueName) {
+        await ctx.db.patch(activity._id, {
+          userName: user?.name,
+          userAvatarUrl: user?.avatarUrl,
+          venueName: venue?.name,
+          venueType: venue?.type,
+        });
+        stats.activity++;
+      }
+    }
+
+    console.log(`Backfilled denormalized fields:`, stats);
+    return {
+      totalRecords: {
+        reviews: allReviews.length,
+        photos: allPhotos.length,
+        favorites: allFavorites.length,
+        activity: allActivity.length,
+      },
+      updated: stats,
+    };
+  },
+});
