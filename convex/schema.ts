@@ -59,6 +59,9 @@ export default defineSchema({
     authorName: v.optional(v.string()),
     authorEmail: v.optional(v.string()),
     authorAvatarUrl: v.optional(v.string()),
+    // Denormalized venue info (avoids joins in listByUser)
+    venueName: v.optional(v.string()),
+    venueType: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

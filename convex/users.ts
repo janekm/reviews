@@ -150,21 +150,6 @@ export const get = query({
 });
 
 /**
- * Get multiple users by IDs
- */
-export const getMany = query({
-  args: { ids: v.array(v.id("users")) },
-  returns: v.array(v.union(publicUserValidator, v.null())),
-  handler: async (ctx, args) => {
-    const users: Array<Doc<"users"> | null> = [];
-    for (const id of args.ids) {
-      users.push(await ctx.db.get(id));
-    }
-    return users;
-  },
-});
-
-/**
  * List all users (admin only)
  */
 export const list = query({

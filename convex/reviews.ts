@@ -1,6 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import { Doc, Id } from "./_generated/dataModel";
+import { Id } from "./_generated/dataModel";
 import { hasMinRole } from "./users";
 
 // Return type for review with author info (uses denormalized fields)
@@ -128,8 +128,7 @@ export const listByVenue = query({
 
 /**
  * List reviews by a user
- * Note: This query still needs to fetch venue info. Consider denormalizing
- * venueName/venueType onto reviews if this becomes a hot path.
+ * Uses denormalized venue fields - no joins needed!
  */
 export const listByUser = query({
   args: { userId: v.id("users") },
@@ -153,27 +152,22 @@ export const listByUser = query({
       .query("reviews")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .order("desc")
-      .take(50); // Limit to prevent unbounded queries
+      .take(50);
 
-    // Batch load venues (still needed since venueName not denormalized on reviews)
-    const venueIds = [...new Set(reviews.map((r) => r.venueId))];
-    const venues = await Promise.all(venueIds.map((id) => ctx.db.get(id)));
-    const venueMap = new Map(
-      venues.filter((v): v is Doc<"venues"> => v !== null).map((v) => [v._id, v])
-    );
-
+    // Use denormalized venue fields - no joins needed
     return reviews
-      .filter((r) => venueMap.has(r.venueId))
+      .filter((r) => r.venueName) // Only return reviews with denormalized data
       .map((review) => ({
         ...review,
-        venueName: venueMap.get(review.venueId)!.name,
-        venueType: venueMap.get(review.venueId)!.type,
+        venueName: review.venueName ?? "Unknown",
+        venueType: review.venueType ?? "unknown",
       }));
   },
 });
 
 /**
  * Get a single review
+ * Uses denormalized author fields - no joins needed!
  */
 export const get = query({
   args: { id: v.id("reviews") },
@@ -186,21 +180,17 @@ export const get = query({
       return null;
     }
 
-    const author = await ctx.db.get(review.userId);
-    if (!author) {
-      return null;
-    }
-
     const isOwner = currentUser?._id === review.userId;
     const isAdmin = currentUser && hasMinRole(currentUser.role, "admin");
 
+    // Use denormalized author fields - no user fetch needed
     return {
       ...review,
       author: {
-        _id: author._id,
-        name: author.name,
-        email: author.email,
-        avatarUrl: author.avatarUrl,
+        _id: review.userId,
+        name: review.authorName,
+        email: review.authorEmail ?? "",
+        avatarUrl: review.authorAvatarUrl,
       },
       canEdit: isOwner || false,
       canDelete: isOwner || isAdmin || false,
@@ -297,6 +287,9 @@ export const create = mutation({
       authorName: currentUser.name,
       authorEmail: currentUser.email,
       authorAvatarUrl: currentUser.avatarUrl,
+      // Denormalized venue info (avoids joins in listByUser)
+      venueName: venue.name,
+      venueType: venue.type,
       createdAt: now,
       updatedAt: now,
     });

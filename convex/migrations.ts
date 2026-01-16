@@ -541,14 +541,24 @@ export const backfillDenormalizedFields = internalMutation({
       activity: 0,
     };
 
-    // Backfill reviews with author info
+    // Backfill reviews with author and venue info
     for (const review of allReviews) {
       const user = usersById.get(review.userId as string);
-      if (user && !review.authorName) {
+      const venue = venuesById.get(review.venueId as string);
+      const needsAuthor = user && !review.authorName;
+      const needsVenue = venue && !review.venueName;
+
+      if (needsAuthor || needsVenue) {
         await ctx.db.patch(review._id, {
-          authorName: user.name,
-          authorEmail: user.email,
-          authorAvatarUrl: user.avatarUrl,
+          ...(needsAuthor && {
+            authorName: user.name,
+            authorEmail: user.email,
+            authorAvatarUrl: user.avatarUrl,
+          }),
+          ...(needsVenue && {
+            venueName: venue.name,
+            venueType: venue.type,
+          }),
         });
         stats.reviews++;
       }
